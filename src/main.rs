@@ -29,7 +29,7 @@ fn main() -> anyhow::Result<()> {
 
     // 加载配置
     let config = AppConfig::load()?;
-    let config = Arc::new(config);
+    let config = Arc::new(Mutex::new(config));
 
     // 初始化 UI
     let ui = AppWindow::new()?;
@@ -37,6 +37,8 @@ fn main() -> anyhow::Result<()> {
 
     // 设置初始状态
     let servers: Vec<SharedString> = config
+        .lock()
+        .unwrap()
         .servers
         .iter()
         .map(|s| SharedString::from(&s.name))
@@ -44,39 +46,57 @@ fn main() -> anyhow::Result<()> {
     ui.set_servers(ModelRc::new(VecModel::from(servers)));
 
     // 如果命令行有文件参数，设置 UI
-    let initial_file = if let Some(path_str) = args.file {
-        if let Ok(abs_path) = utils::normalize_path(&path_str) {
+    if let Some(path_str) = &args.file {
+        if let Ok(abs_path) = utils::normalize_path(path_str) {
             ui.set_file_path(SharedString::from(abs_path.to_string_lossy().to_string()));
-            Some(abs_path)
         } else {
             ui.set_file_path(SharedString::from(path_str));
-            None
         }
-    } else {
-        None
-    };
+    }
 
-    // 如果有文件，准备好 context
-    let selected_file = Arc::new(Mutex::new(initial_file));
+    // 初始化 target-dir (使用第一个服务器的默认目录)
+    {
+        let servers = config.lock().unwrap().servers.clone();
+        if let Some(first_server) = servers.first() {
+            ui.set_target_dir(SharedString::from(&first_server.default_target_dir));
+        }
+    }
+
+    // 绑定文件选择
+    let ui_handle_pick = ui.as_weak();
+    ui.on_pick_file(move || {
+        if let Some(ui) = ui_handle_pick.upgrade() {
+            // 弹出文件选择框
+            if let Some(path) = rfd::FileDialog::new().pick_file() {
+                ui.set_file_path(SharedString::from(path.to_string_lossy().to_string()));
+            }
+        }
+    });
+
+    // 绑定服务器切换 (更新默认目录)
+    let config_clone_select = config.clone();
+    let ui_handle_select = ui.as_weak();
+    ui.on_server_selected(move |index| {
+        let config = config_clone_select.lock().unwrap();
+        if index >= 0 && (index as usize) < config.servers.len() {
+            let server = &config.servers[index as usize];
+            if let Some(ui) = ui_handle_select.upgrade() {
+                ui.set_target_dir(SharedString::from(&server.default_target_dir));
+            }
+        }
+    });
 
     // 绑定开始上传事件
     let config_clone = config.clone();
-    let _ = selected_file.clone(); // 保留引用虽然未直接使用，或者直接删除。这里虽然提示unused，但保留着也没坏处，或者直接删了。
-                                   // User warning said: help: if this is intentional, prefix it with an underscore: `_selected_file_clone`
-                                   // I will simply generally remove selected_file_clone as it is not used in the closure.
     let ui_handle_clone = ui_handle.clone();
 
     ui.on_start_upload(move |server_index| {
         let ui = ui_handle_clone.unwrap();
 
-        // 获取当前文件路径 (以 UI 显示为准，如果支持拖拽的话)
-        // 目前简单起见，使用命令行传入的或者默认的
-        // 实际上应该允许 UI 选择文件，但 Slint 标准库目前没有文件选择对话框
-        // 这里假设主要通过右键菜单使用
-
+        // 获取当前文件路径
         let file_path_str = ui.get_file_path();
         if file_path_str == "未选择文件" {
-            ui.set_status_log("请先选择文件 (目前仅支持通过命令行或右键菜单传入)".into());
+            ui.set_status_log("请先选择文件".into());
             return;
         }
 
@@ -89,11 +109,17 @@ fn main() -> anyhow::Result<()> {
         }
 
         // 获取服务器配置
-        if server_index < 0 || server_index as usize >= config_clone.servers.len() {
+        let config_guard = config_clone.lock().unwrap();
+        if server_index < 0 || server_index as usize >= config_guard.servers.len() {
             ui.set_status_log("无效的服务器选择".into());
             return;
         }
-        let server_config = config_clone.servers[server_index as usize].clone();
+        let mut server_config = config_guard.servers[server_index as usize].clone();
+        drop(config_guard); // 释放锁
+
+        // 获取 UI 上的目标目录 (允许覆盖默认配置)
+        let target_dir_str = ui.get_target_dir();
+        server_config.default_target_dir = target_dir_str.to_string();
 
         // 更新 UI 状态
         ui.set_is_uploading(true);
@@ -123,12 +149,54 @@ fn main() -> anyhow::Result<()> {
                         }
                         Err(e) => {
                             ui.set_status_log(format!("上传失败: {}", e).into());
-                            // 保持进度条，或者重置？保持以便查看
                         }
                     }
                 }
             });
         });
+    });
+
+    // 绑定保存配置事件
+    let config_clone_save = config.clone();
+    let ui_handle_save = ui.as_weak();
+    ui.on_save_config(move |ui_config| {
+        let mut config_guard = config_clone_save.lock().unwrap();
+
+        let new_server = ServerConfig {
+            name: ui_config.name.into(),
+            host: ui_config.host.into(),
+            port: ui_config.port.parse().unwrap_or(22),
+            user: ui_config.user.into(),
+            auth_type: ui_config.auth_type.into(),
+            password: if ui_config.password.is_empty() {
+                None
+            } else {
+                Some(ui_config.password.into())
+            },
+            key_path: if ui_config.key_path.is_empty() {
+                None
+            } else {
+                Some(ui_config.key_path.into())
+            },
+            default_target_dir: ui_config.default_target_dir.into(),
+        };
+
+        config_guard.servers.push(new_server);
+
+        if let Err(e) = config_guard.save() {
+            eprintln!("Failed to save config: {}", e);
+        }
+
+        // 刷新 UI 列表
+        let servers: Vec<SharedString> = config_guard
+            .servers
+            .iter()
+            .map(|s| SharedString::from(&s.name))
+            .collect();
+        if let Some(ui) = ui_handle_save.upgrade() {
+            ui.set_servers(ModelRc::new(VecModel::from(servers)));
+            // 可选: 自动选中新增的服务器 (servers.len() - 1)
+        }
     });
 
     ui.run()?;

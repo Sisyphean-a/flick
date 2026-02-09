@@ -81,10 +81,26 @@ impl FileTransfer for SshUploader {
         let metadata = local_file.metadata()?;
         let total_size = metadata.len();
 
+        // 尝试创建远程目录
+        if let Some(parent) = remote_path.parent() {
+            // 简单的 mkdir -p 模拟：尝试执行命令
+            // 注意：这假设服务器是 Linux/Unix 且支持 mkdir -p
+            // 对于 Windows 服务器，可能需要 "mkdir" 或其他命令
+            // 这里为了健壮性，忽略错误（可能目录已存在，或者没有执行权限，或者不是 Unix）
+            // 更好的做法是检查 SFTP stat，如果不存在则 mkdir
+
+            // 使用 channel 执行命令
+            let mut channel = self.session.channel_session()?;
+            let parent_str = parent.to_string_lossy();
+            // 转换路径分隔符以适应 Linux (即使本地是 Windows)
+            let parent_unix = parent_str.replace("\\", "/");
+            let _ = channel.exec(&format!("mkdir -p \"{}\"", parent_unix));
+            let _ = channel.wait_close();
+        }
+
         let sftp = self.session.sftp().with_context(|| "无法建立 SFTP 会话")?;
 
-        // 确保远程目录存在是比较麻烦的，这里假设通过 absolute path 直接写入
-        // 如果需要 mkdir -p，需要额外实现
+        // ... (rest of the upload logic)
 
         let mut remote_file = sftp
             .create(remote_path)

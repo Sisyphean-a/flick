@@ -1,89 +1,239 @@
 import { Button, VerticalBox, ComboBox, LineEdit, ProgressIndicator, HorizontalBox, GroupBox } from "std-widgets.slint";
 
+import { Button, VerticalBox, ComboBox, LineEdit, ProgressIndicator, HorizontalBox, GroupBox, StandardListView, GridBox } from "std-widgets.slint";
+
+export struct ServerConfigUI {
+    name: string,
+    host: string,
+    port: string,
+    user: string,
+    auth_type: string, // "password" or "key"
+    password: string,
+    key_path: string,
+    default_target_dir: string,
+}
+
 export component AppWindow inherits Window {
     title: "Flick 文件传输";
-    min-width: 450px;
-    min-height: 350px;
-    default-font-family: "Microsoft YaHei"; // 确保中文显示正常
+    min-width: 500px;
+    min-height: 450px;
+    default-font-family: "Microsoft YaHei";
 
     // 输入属性
     in property <string> file-path: "未选择文件";
+    // 远程目录 (默认从配置加载，可修改)
+    in-out property <string> target-dir: "/tmp"; 
     in property <float> progress: 0.0;
     in property <string> status-log: "等待操作...";
     in property <[string]> servers: ["本地测试服务器"];
     in property <bool> is-uploading: false;
+    
+    // 配置相关 (省略...)
+    in-out property <bool> show-settings: false;
+    in-out property <ServerConfigUI> current-config: {
+        name: "New Server",
+        host: "127.0.0.1",
+        port: "22",
+        user: "root",
+        auth_type: "password",
+        password: "",
+        key_path: "",
+        default_target_dir: "/tmp"
+    };
 
     // 回调函数
-    callback start-upload(int); // 参数：选中的服务器索引
+    callback start-upload(int); 
     callback cancel-upload();
+    callback save-config(ServerConfigUI);
+    callback delete-config(int); // 预留
+    callback pick-file(); // 浏览文件
+    callback server-selected(int); // 服务器切换
 
-    VerticalBox {
-        padding: 20px;
-        spacing: 15px;
-
-        Text {
-            text: "Flick ⚡";
-            font-size: 24px;
-            font-weight: 700;
-            horizontal-alignment: center;
-        }
-
-        GroupBox {
-            title: "目标文件";
-            Text {
-                text: root.file-path;
-                wrap: word-wrap;
-                font-size: 14px;
-                color: #555;
-            }
-        }
-
-        HorizontalBox {
-            spacing: 10px;
-            Text {
-                text: "选择服务器:";
-                vertical-alignment: center;
-            }
-            ComboBox {
-                model: root.servers;
-                current-index: 0;
-                width: 60%;
-                enabled: !root.is-uploading;
-            }
-        }
-
+    GridLayout {
+        // 主界面内容
         VerticalBox {
-            spacing: 5px;
+            padding: 20px;
+            spacing: 15px;
+            visible: !root.show-settings;
+
+            HorizontalBox {
+                alignment: space-between;
+                Text {
+                    text: "Flick ⚡";
+                    font-size: 24px;
+                    font-weight: 700;
+                }
+                Button {
+                    text: "⚙️ 设置";
+                    width: 80px;
+                    clicked => {
+                        root.show-settings = true;
+                    }
+                }
+            }
+
+            GroupBox {
+                title: "目标文件";
+                HorizontalBox {
+                    spacing: 5px;
+                    LineEdit {
+                        text: root.file-path;
+                        enabled: false; // 只读，通过按钮选择
+                        horizontal-alignment: left;
+                    }
+                    Button {
+                        text: "📂 浏览";
+                        width: 80px;
+                        clicked => { root.pick-file(); }
+                    }
+                }
+            }
+
+            HorizontalBox {
+                spacing: 10px;
+                Text {
+                    text: "选择服务器:";
+                    vertical-alignment: center;
+                    width: 80px;
+                }
+                server-combo := ComboBox {
+                    model: root.servers;
+                    current-index: 0;
+                    width: 60%;
+                    enabled: !root.is-uploading;
+                    selected(val) => {
+                        root.server-selected(self.current-index);
+                    }
+                }
+            }
+
+            HorizontalBox {
+                spacing: 10px;
+                Text {
+                    text: "远程目录:";
+                    vertical-alignment: center;
+                    width: 80px;
+                }
+                LineEdit {
+                    text <=> root.target-dir;
+                    placeholder-text: "/tmp";
+                    enabled: !root.is-uploading;
+                }
+            }
+
+            VerticalBox {
+                spacing: 5px;
+                Text {
+                    text: "传输进度: " + Math.round(root.progress * 100) + "%";
+                    font-size: 12px;
+                    color: #888;
+                }
+                ProgressIndicator {
+                    progress: root.progress;
+                    height: 8px;
+                }
+            }
+
             Text {
-                text: "传输进度: " + Math.round(root.progress * 100) + "%";
-                font-size: 12px;
-                color: #888;
+                text: root.status-log;
+                color: root.is-uploading ? #007bff : #666;
+                horizontal-alignment: center;
             }
-            ProgressIndicator {
-                progress: root.progress;
-                height: 8px;
+
+            HorizontalBox {
+                alignment: center;
+                Button {
+                    text: root.is-uploading ? "取消" : "开始传输"; // 简化显示
+                    primary: true;
+                    width: 120px;
+                    height: 36px;
+                    enabled: !root.is-uploading; 
+                    clicked => {
+                        if (!root.is-uploading) {
+                            root.start-upload(server-combo.current-index);
+                        }
+                    }
+                }
             }
         }
 
-        Text {
-            text: root.status-log;
-            color: root.is-uploading ? #007bff : #666;
-            horizontal-alignment: center;
-        }
+        // 设置覆盖层
+        Rectangle {
+            background: #ffffff;
+            visible: root.show-settings;
+            z: 100; // 确保在最上层
+            
+            VerticalBox {
+                padding: 20px;
+                spacing: 10px;
+                
+                Text {
+                    text: "添加/编辑服务器 (简化版: 仅支持新增)"; 
+                    font-size: 18px;
+                    font-weight: 700;
+                }
 
-        HorizontalBox {
-            alignment: center;
-            Button {
-                text: root.is-uploading ? "取消 (暂不支持)" : "开始传输";
-                primary: true;
-                width: 120px;
-                height: 36px;
-                enabled: !root.is-uploading; // 暂时禁用取消，因为 ssh2 阻塞
-                clicked => {
-                    if (!root.is-uploading) {
-                        // ComboBox 的 current-index 无法直接传递给 callback? 
-                        // 测试时发现可以，或者通过 property binding 传递
-                        root.start-upload(0); // 暂时传0，需要在 Rust 端获取 index
+                HorizontalBox {
+                    Text { text: "别名:"; width: 80px; vertical-alignment: center; }
+                    LineEdit { 
+                        text <=> root.current-config.name; 
+                        placeholder-text: "例如: 阿里云 Shanghai";
+                    }
+                }
+
+                HorizontalBox {
+                    Text { text: "Host:"; width: 80px; vertical-alignment: center; }
+                    LineEdit { text <=> root.current-config.host; placeholder-text: "IP or Domain"; }
+                    Text { text: "Port:"; width: 40px; vertical-alignment: center; }
+                    LineEdit { text <=> root.current-config.port; width: 60px; }
+                }
+
+                HorizontalBox {
+                    Text { text: "用户:"; width: 80px; vertical-alignment: center; }
+                    LineEdit { text <=> root.current-config.user; }
+                }
+
+                HorizontalBox {
+                    Text { text: "密码:"; width: 80px; vertical-alignment: center; }
+                    LineEdit { 
+                        text <=> root.current-config.password; 
+                        input-type: password;
+                        placeholder-text: "若使用 Key 可留空";
+                    }
+                }
+                 
+                // 简化起见，Key Path 暂不直接支持文件选择，先用文本框或者只做密码认证
+                // 若要支持 Key，需要增加 auth_type 切换逻辑，这里为了 MVP 先把 Key Path 放着
+                HorizontalBox {
+                    Text { text: "Key Path:"; width: 80px; vertical-alignment: center; }
+                    LineEdit { 
+                        text <=> root.current-config.key_path; 
+                        placeholder-text: "私钥绝对路径 (可选)";
+                    }
+                }
+
+                HorizontalBox {
+                    Text { text: "目标目录:"; width: 80px; vertical-alignment: center; }
+                    LineEdit { text <=> root.current-config.default_target_dir; }
+                }
+
+                HorizontalBox {
+                    alignment: end;
+                    spacing: 10px;
+                    
+                    Button {
+                        text: "取消";
+                        clicked => {
+                            root.show-settings = false;
+                        }
+                    }
+                    Button {
+                        text: "保存并使用";
+                        primary: true;
+                        clicked => {
+                            root.save-config(root.current-config);
+                            root.show-settings = false;
+                        }
                     }
                 }
             }
