@@ -1,0 +1,33 @@
+[package]
+name = "flick"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# UI 框架：轻量、Rust 原生、支持实时预览
+slint = "1.9" 
+
+# SSH 核心库
+ssh2 = "0.9"
+
+# 命令行参数解析 (用于接收文件路径)
+clap = { version = "4.4", features = ["derive"] }
+
+# 配置文件处理 (TOML)
+serde = { version = "1.0", features = ["derive"] }
+serde_derive = "1.0"
+toml = "0.8"
+
+# 错误处理
+anyhow = "1.0"
+
+# 目录查找 (找 Config 文件用)
+dirs = "5.0"
+
+[build-dependencies]
+slint-build = "1.9"
+
+[profile.release]
+lto = true
+strip = true
+opt-level = "z"
