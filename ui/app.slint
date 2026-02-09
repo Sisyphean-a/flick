@@ -1,4 +1,4 @@
-import { Button, VerticalBox, ComboBox, LineEdit, ProgressBar, Text, HorizontalBox, GroupBox } from "std-widgets.slint";
+import { Button, VerticalBox, ComboBox, LineEdit, ProgressIndicator, HorizontalBox, GroupBox } from "std-widgets.slint";
 
 export component AppWindow inherits Window {
     title: "Flick 文件传输";
@@ -59,8 +59,8 @@ export component AppWindow inherits Window {
                 font-size: 12px;
                 color: #888;
             }
-            ProgressBar {
-                value: root.progress;
+            ProgressIndicator {
+                progress: root.progress;
                 height: 8px;
             }
         }
