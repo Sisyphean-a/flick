@@ -43,7 +43,18 @@ fn main() -> anyhow::Result<()> {
         .iter()
         .map(|s| SharedString::from(&s.name))
         .collect();
+
+
     ui.set_servers(ModelRc::new(VecModel::from(servers)));
+
+    // 设置 SSH Key 提示文案
+    let ssh_hint = if let Some(home) = dirs::home_dir() {
+        let ssh_dir = home.join(".ssh");
+        format!("自动探测 (Agent 或 {})", ssh_dir.to_string_lossy())
+    } else {
+        "自动探测 (Agent/Default)".to_string()
+    };
+    ui.set_ssh_key_hint(SharedString::from(ssh_hint));
 
     // 如果命令行有文件参数，设置 UI
     if let Some(path_str) = &args.file {
@@ -159,7 +170,7 @@ fn main() -> anyhow::Result<()> {
     // 绑定保存配置事件
     let config_clone_save = config.clone();
     let ui_handle_save = ui.as_weak();
-    ui.on_save_config(move |ui_config| {
+    ui.on_save_config(move |index, ui_config| {
         let mut config_guard = config_clone_save.lock().unwrap();
 
         let new_server = ServerConfig {
@@ -181,7 +192,13 @@ fn main() -> anyhow::Result<()> {
             default_target_dir: ui_config.default_target_dir.into(),
         };
 
-        config_guard.servers.push(new_server);
+        if index == -1 {
+            // 新增
+            config_guard.servers.push(new_server);
+        } else if index >= 0 && (index as usize) < config_guard.servers.len() {
+            // 更新
+            config_guard.servers[index as usize] = new_server;
+        }
 
         if let Err(e) = config_guard.save() {
             eprintln!("Failed to save config: {}", e);
@@ -195,8 +212,131 @@ fn main() -> anyhow::Result<()> {
             .collect();
         if let Some(ui) = ui_handle_save.upgrade() {
             ui.set_servers(ModelRc::new(VecModel::from(servers)));
-            // 可选: 自动选中新增的服务器 (servers.len() - 1)
+            ui.set_show_settings(false); // 保存后关闭设置窗口
         }
+    });
+
+    // 绑定删除配置事件
+    let config_clone_del = config.clone();
+    let ui_handle_del = ui.as_weak();
+    ui.on_delete_config(move |index| {
+        let mut config_guard = config_clone_del.lock().unwrap();
+
+        if index >= 0 && (index as usize) < config_guard.servers.len() {
+            config_guard.servers.remove(index as usize);
+
+            if let Err(e) = config_guard.save() {
+                eprintln!("Failed to save config after delete: {}", e);
+            }
+
+            // 刷新 UI 列表
+            let servers: Vec<SharedString> = config_guard
+                .servers
+                .iter()
+                .map(|s| SharedString::from(&s.name))
+                .collect();
+            if let Some(ui) = ui_handle_del.upgrade() {
+                ui.set_servers(ModelRc::new(VecModel::from(servers)));
+                // 删除后由于索引变化，当前选中的 server 可能需要重置，或者界面逻辑会自动处理
+                // 这里为了安全，重置为新建状态
+                ui.set_current_settings_index(-1);
+                ui.set_current_config(ServerConfigUI {
+                    name: "New Server".into(),
+                    host: "".into(),
+                    port: "22".into(),
+                    user: "root".into(),
+                    auth_type: "password".into(),
+                    password: "".into(),
+                    key_path: "".into(),
+                    default_target_dir: "/tmp".into(),
+                });
+            }
+        }
+    });
+
+    // 绑定密钥文件选择
+    let ui_handle_key = ui.as_weak();
+    ui.on_pick_key_file(move || {
+        if let Some(ui) = ui_handle_key.upgrade() {
+            if let Some(path) = rfd::FileDialog::new().pick_file() {
+                // 读取当前配置
+                let mut current_config = ui.get_current_config();
+                current_config.key_path = SharedString::from(path.to_string_lossy().to_string());
+                ui.set_current_config(current_config);
+            }
+        }
+    });
+
+    // 绑定加载设置配置事件
+    let config_clone_load = config.clone();
+    let ui_handle_load = ui.as_weak();
+    ui.on_load_config(move |index| {
+        let config_guard = config_clone_load.lock().unwrap();
+        if index >= 0 && (index as usize) < config_guard.servers.len() {
+            let server = &config_guard.servers[index as usize];
+            let ui_config = ServerConfigUI {
+                name: server.name.clone().into(),
+                host: server.host.clone().into(),
+                port: server.port.to_string().into(),
+                user: server.user.clone().into(),
+                auth_type: server.auth_type.clone().into(),
+                password: server.password.clone().unwrap_or_default().into(),
+                key_path: server.key_path.clone().unwrap_or_default().into(),
+                default_target_dir: server.default_target_dir.clone().into(),
+            };
+
+            if let Some(ui) = ui_handle_load.upgrade() {
+                ui.set_current_config(ui_config);
+            }
+        }
+    });
+
+    // 绑定测试连接事件
+    let ui_handle_test = ui.as_weak();
+    ui.on_test_connection(move |ui_config| {
+        let server_config = ServerConfig {
+            name: ui_config.name.into(),
+            host: ui_config.host.into(),
+            port: ui_config.port.parse().unwrap_or(22),
+            user: ui_config.user.into(),
+            auth_type: ui_config.auth_type.into(),
+            password: if ui_config.password.is_empty() {
+                None
+            } else {
+                Some(ui_config.password.into())
+            },
+            key_path: if ui_config.key_path.is_empty() {
+                None
+            } else {
+                Some(ui_config.key_path.into())
+            },
+            default_target_dir: ui_config.default_target_dir.into(),
+        };
+
+        let ui_handle_test_thread = ui_handle_test.clone();
+        thread::spawn(move || {
+            let (result, logs) = SshUploader::connect_with_log(&server_config);
+
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(ui) = ui_handle_test_thread.upgrade() {
+                    ui.set_is_testing(false);
+                    ui.set_test_log(logs.into()); // 设置日志内容
+                    
+                    match result {
+                        Ok(_) => {
+                            ui.set_test_success(true);
+                            ui.set_test_result("成功: 连接已建立 ✅".into());
+                            ui.set_show_log(false); // 成功时默认不展开日志
+                        }
+                        Err(e) => {
+                            ui.set_test_success(false);
+                            ui.set_test_result(format!("失败: {}", e).into());
+                            ui.set_show_log(true); // 失败时自动展开日志
+                        }
+                    }
+                }
+            });
+        });
     });
 
     ui.run()?;
