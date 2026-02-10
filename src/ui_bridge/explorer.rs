@@ -495,7 +495,7 @@ fn bind_upload_selected(
     remote_state: Arc<Mutex<RemoteState>>,
     queue: Arc<Mutex<TransferQueue>>,
 ) {
-    let ui_handle = ui.as_weak();
+    let _ui_handle = ui.as_weak();
     ui.on_upload_selected(move || {
         let (local_files, remote_path, uploader_opt) = {
             let ls = local_state.lock().unwrap();
@@ -541,7 +541,6 @@ fn bind_upload_selected(
 
             // 启动后台传输线程
             let queue_clone = queue.clone();
-            let ui_h = ui_handle.clone();
             let cfg = uploader_config.clone();
             thread::spawn(move || {
                 // 连接
@@ -587,7 +586,7 @@ fn bind_download_selected(
     remote_state: Arc<Mutex<RemoteState>>,
     queue: Arc<Mutex<TransferQueue>>,
 ) {
-    let ui_handle = ui.as_weak();
+    let _ui_handle = ui.as_weak();
     ui.on_download_selected(move || {
         let (remote_files, local_path, uploader_opt) = {
             let rs = remote_state.lock().unwrap();
@@ -638,7 +637,6 @@ fn bind_download_selected(
 
             // 启动后台传输线程
             let queue_clone = queue.clone();
-            let ui_h = ui_handle.clone();
             let cfg = uploader_config.clone();
             thread::spawn(move || {
                 // 连接

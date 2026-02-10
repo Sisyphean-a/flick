@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 /// 标准化路径，处理相对路径和波浪号 (~) 等
 /// 目前简单实现，直接返回绝对路径
 /// 标准化路径
+#[allow(dead_code)]
 pub fn normalize_path(path_str: &str) -> Result<PathBuf> {
     let path = PathBuf::from(path_str);
 
@@ -23,6 +24,7 @@ pub fn normalize_path(path_str: &str) -> Result<PathBuf> {
 }
 
 /// 检查文件是否存在且是文件
+#[allow(dead_code)]
 pub fn ensure_file_exists(path: &Path) -> Result<()> {
     if !path.exists() {
         anyhow::bail!("文件不存在: {:?}", path);

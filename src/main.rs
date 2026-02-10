@@ -47,7 +47,7 @@ fn main() -> anyhow::Result<()> {
 fn init_ui_state(
     ui: &AppWindow,
     config: &Arc<Mutex<AppConfig>>,
-    args: &Args,
+    _args: &Args,
 ) {
     let guard = config.lock().unwrap();
 

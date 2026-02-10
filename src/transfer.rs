@@ -1,7 +1,7 @@
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 
 /// 传输方向
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Direction {
     Upload,
@@ -9,6 +9,7 @@ pub enum Direction {
 }
 
 /// 传输任务状态
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum TransferStatus {
     Pending,
@@ -18,6 +19,7 @@ pub enum TransferStatus {
 }
 
 /// 单个传输任务
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct TransferTask {
     pub id: usize,
@@ -31,11 +33,13 @@ pub struct TransferTask {
 }
 
 /// 传输队列
+#[allow(dead_code)]
 pub struct TransferQueue {
     tasks: Vec<TransferTask>,
     next_id: usize,
 }
 
+#[allow(dead_code)]
 impl TransferQueue {
     pub fn new() -> Self {
         Self {
