@@ -34,8 +34,18 @@ fn bind_save(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
         let new_server = convert::from_ui(&ui_config);
 
         if index == -1 {
+            if new_server.is_default {
+                for s in &mut guard.servers {
+                    s.is_default = false;
+                }
+            }
             guard.servers.push(new_server);
         } else if index >= 0 && (index as usize) < guard.servers.len() {
+            if new_server.is_default {
+                for s in &mut guard.servers {
+                    s.is_default = false;
+                }
+            }
             guard.servers[index as usize] = new_server;
         }
 

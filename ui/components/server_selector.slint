@@ -4,26 +4,21 @@ export component ServerSelector inherits Rectangle {
     in property <[string]> servers: [];
     in property <bool> connected: false;
     in property <bool> connecting: false;
-
+    in-out property <int> current-index <=> combo.current-index;
     callback connect(int);
     callback disconnect();
-
     height: 36px;
-
     HorizontalLayout {
         spacing: 6px;
         padding: 4px;
-
         combo := ComboBox {
             model: root.servers;
-            current-index: 0;
             enabled: !root.connected && !root.connecting;
             horizontal-stretch: 1;
         }
 
         Button {
-            text: root.connecting ? "连接中..."
-                : root.connected ? "断开" : "连接";
+            text: root.connecting ? "连接中..." : root.connected ? "断开" : "连接";
             width: 70px;
             enabled: !root.connecting;
             clicked => {

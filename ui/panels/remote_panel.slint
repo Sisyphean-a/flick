@@ -10,7 +10,7 @@ export component RemotePanel inherits Rectangle {
     in property <bool> connected: false;
     in property <bool> connecting: false;
     in property <string> status-text: "";
-
+    in-out property <int> current-server-index: 0;
     callback connect(int);
     callback disconnect();
     callback navigate(string);
@@ -22,11 +22,9 @@ export component RemotePanel inherits Rectangle {
     callback mkdir(string);
     callback delete-selected();
     callback rename-item(int, string);
-
     border-width: 1px;
     border-color: #e0e0e0;
     border-radius: 4px;
-
     VerticalLayout {
         spacing: 0px;
 
@@ -43,29 +41,41 @@ export component RemotePanel inherits Rectangle {
                     vertical-alignment: center;
                     horizontal-stretch: 1;
                 }
+
                 Button {
                     text: "📁+";
                     width: 36px;
                     enabled: root.connected;
-                    clicked => { root.mkdir("新建目录"); }
+                    clicked => {
+                        root.mkdir("新建目录");
+                    }
                 }
+
                 Button {
                     text: "🗑";
                     width: 28px;
                     enabled: root.connected;
-                    clicked => { root.delete-selected(); }
+                    clicked => {
+                        root.delete-selected();
+                    }
                 }
+
                 Button {
                     text: "☑";
                     width: 28px;
                     enabled: root.connected;
-                    clicked => { root.select-all(); }
+                    clicked => {
+                        root.select-all();
+                    }
                 }
+
                 Button {
                     text: "🔄";
                     width: 28px;
                     enabled: root.connected;
-                    clicked => { root.refresh(); }
+                    clicked => {
+                        root.refresh();
+                    }
                 }
             }
         }
@@ -75,43 +85,50 @@ export component RemotePanel inherits Rectangle {
             servers: root.servers;
             connected: root.connected;
             connecting: root.connecting;
-            connect(idx) => { root.connect(idx); }
-            disconnect() => { root.disconnect(); }
+            current-index <=> root.current-server-index;
+            connect(idx) => {
+                root.connect(idx);
+            }
+            disconnect() => {
+                root.disconnect();
+            }
         }
 
         // 面包屑（连接后显示）
         if root.connected: PathBreadcrumb {
             current-path: root.current-path;
-            navigate(p) => { root.navigate(p); }
-            go-up() => { root.go-up(); }
+            navigate(p) => {
+                root.navigate(p);
+            }
+            go-up() => {
+                root.go-up();
+            }
         }
 
         // 文件列表 / 状态提示
         Rectangle {
             clip: true;
-
             if root.connected: Flickable {
-                x: 0px; y: 0px;
-                width: 100%; height: 100%;
+                x: 0px;
+                y: 0px;
+                width: 100%;
+                height: 100%;
                 viewport-height: root.files.length * 30px;
                 VerticalLayout {
                     alignment: start;
                     for file[i] in root.files: FileItem {
                         entry: file;
-                        clicked => { root.file-clicked(i); }
+                        clicked => {
+                            root.file-clicked(i);
+                        }
                         double-clicked => {
                             root.file-double-clicked(i);
                         }
                     }
                 }
             }
-
             if !root.connected: Text {
-                text: root.connecting
-                    ? "正在连接..."
-                    : root.status-text != ""
-                        ? root.status-text
-                        : "请选择服务器并连接";
+                text: root.connecting ? "正在连接..." : root.status-text != "" ? root.status-text : "请选择服务器并连接";
                 horizontal-alignment: center;
                 vertical-alignment: center;
                 color: #999;

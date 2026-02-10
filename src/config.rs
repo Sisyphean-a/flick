@@ -22,6 +22,9 @@ pub struct ServerConfig {
     pub key_path: Option<String>,
     /// 默认上传的目标目录
     pub default_target_dir: String,
+    /// 是否为默认服务器 (启动时自动选中)
+    #[serde(default)]
+    pub is_default: bool,
 }
 
 impl Default for ServerConfig {
@@ -35,6 +38,7 @@ impl Default for ServerConfig {
             password: Some("123456".to_string()),
             key_path: None,
             default_target_dir: "/tmp".to_string(),
+            is_default: false,
         }
     }
 }

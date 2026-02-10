@@ -61,6 +61,14 @@ fn init_ui_state(
         .collect();
     ui.set_servers(ModelRc::new(VecModel::from(servers)));
 
+    // 默认选中服务器
+    let default_idx = guard
+        .servers
+        .iter()
+        .position(|s| s.is_default)
+        .unwrap_or(0);
+    ui.set_remote_server_index(default_idx as i32);
+
     // SSH Key 提示
     let ssh_hint = match dirs::home_dir() {
         Some(home) => {

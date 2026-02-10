@@ -14,6 +14,7 @@ pub fn to_ui(server: &ServerConfig) -> ServerConfigUI {
         password: SharedString::from(server.password.as_deref().unwrap_or("")),
         key_path: SharedString::from(server.key_path.as_deref().unwrap_or("")),
         default_target_dir: SharedString::from(&server.default_target_dir),
+        is_default: server.is_default,
     }
 }
 
@@ -39,6 +40,7 @@ pub fn from_ui(ui_config: &ServerConfigUI) -> ServerConfig {
             Some(ui_config.key_path.to_string())
         },
         default_target_dir: ui_config.default_target_dir.to_string(),
+        is_default: ui_config.is_default,
     }
 }
 
@@ -53,5 +55,6 @@ pub fn default_ui_config() -> ServerConfigUI {
         password: "".into(),
         key_path: "".into(),
         default_target_dir: "/tmp".into(),
+        is_default: false,
     }
 }

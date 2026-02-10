@@ -1,4 +1,4 @@
-use slint::{ComponentHandle, ModelRc, SharedString, Timer, TimerMode, VecModel};
+use slint::{ComponentHandle, Model, ModelRc, SharedString, Timer, TimerMode, VecModel};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -175,13 +175,28 @@ fn bind_local_file_clicked(
         if let Some(ui) = ui_handle.upgrade() {
             let mut s = state.lock().unwrap();
             let idx = index as usize;
-            if s.selected_indices.contains(&idx) {
+            
+            // 切换选中状态
+            let is_selected = if s.selected_indices.contains(&idx) {
                 s.selected_indices.remove(&idx);
+                false
             } else {
                 s.selected_indices.insert(idx);
+                true
+            };
+            
+            // 获取缓存数据并更新单行 Model，避免重建组件导致丢失双击事件
+            if let Some(entry) = s.cached_entries.get(idx).cloned() {
+                drop(s);
+                let file_entry = FileEntry {
+                    name: SharedString::from(&entry.name),
+                    is_dir: entry.is_dir,
+                    size: SharedString::from(format_size(entry.size)),
+                    modified: SharedString::from(&entry.modified),
+                    selected: is_selected,
+                };
+                ui.get_local_files().set_row_data(idx, file_entry);
             }
-            drop(s);
-            refresh_local(&ui, &state);
         }
     });
 }
@@ -454,17 +469,26 @@ fn bind_remote_file_clicked(
         if let Some(ui) = ui_handle.upgrade() {
             let mut s = state.lock().unwrap();
             let idx = index as usize;
-            if s.selected_indices.contains(&idx) {
+            
+            let is_selected = if s.selected_indices.contains(&idx) {
                 s.selected_indices.remove(&idx);
+                false
             } else {
                 s.selected_indices.insert(idx);
-            }
-            let selected = s.selected_indices.clone();
-            let entries = s.cached_entries.clone();
-            drop(s);
+                true
+            };
 
-            let ui_entries = remote_entries_to_ui(&entries, &selected);
-            ui.set_remote_files(ModelRc::new(VecModel::from(ui_entries)));
+            if let Some(entry) = s.cached_entries.get(idx).cloned() {
+                drop(s);
+                let file_entry = FileEntry {
+                    name: SharedString::from(&entry.name),
+                    is_dir: entry.is_dir,
+                    size: SharedString::from(format_size(entry.size)),
+                    modified: SharedString::from(&entry.modified),
+                    selected: is_selected,
+                };
+                ui.get_remote_files().set_row_data(idx, file_entry);
+            }
         }
     });
 }

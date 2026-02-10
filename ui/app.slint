@@ -1,6 +1,11 @@
 import {
-    Button, VerticalBox, ComboBox, LineEdit,
-    ProgressIndicator, HorizontalBox, GroupBox,
+    Button,
+    VerticalBox,
+    ComboBox,
+    LineEdit,
+    ProgressIndicator,
+    HorizontalBox,
+    GroupBox,
 } from "std-widgets.slint";
 
 import { SettingsPage } from "pages/settings_page.slint";
@@ -18,29 +23,29 @@ export component AppWindow inherits Window {
     min-width: 700px;
     min-height: 500px;
     default-font-family: "Microsoft YaHei";
-
     in-out property <bool> show-settings: false;
     in-out property <int> current-settings-index: -1;
     in-out property <ServerConfigUI> current-config: {
-        name: "New Server", host: "127.0.0.1", port: "22",
-        user: "root", auth_type: "password",
-        password: "", key_path: "",
+        name: "New Server",
+        host: "127.0.0.1",
+        port: "22",
+        user: "root",
+        auth_type: "password",
+        password: "",
+        key_path: "",
         default_target_dir: "/tmp"
     };
-
     callback save-config(int, ServerConfigUI);
     callback delete-config(int);
     callback pick-key-file();
     callback load-config(int);
     callback test-connection(ServerConfigUI);
-
     in-out property <string> test-result: "";
     in-out property <bool> test-success: false;
     in-out property <bool> is-testing: false;
     in-out property <string> test-log: "";
     in-out property <bool> show-log: false;
     in property <string> ssh-key-hint: "留空自动探测 (Agent/Default)";
-
     in property <[string]> servers: ["本地测试服务器"];
 
     // 本地文件浏览器
@@ -59,6 +64,7 @@ export component AppWindow inherits Window {
     in property <bool> remote-connected: false;
     in property <bool> remote-connecting: false;
     in property <string> remote-status: "";
+    in-out property <int> remote-server-index: 0;
     callback remote-connect(int);
     callback remote-disconnect();
     callback remote-navigate(string);
@@ -101,9 +107,15 @@ export component AppWindow inherits Window {
         is-uploading: root.is-uploading;
         progress: root.progress;
         status-log: root.status-log;
-        pick-file() => { root.pick-file(); }
-        server-selected(idx) => { root.server-selected(idx); }
-        start-upload(idx) => { root.start-upload(idx); }
+        pick-file() => {
+            root.pick-file();
+        }
+        server-selected(idx) => {
+            root.server-selected(idx);
+        }
+        start-upload(idx) => {
+            root.start-upload(idx);
+        }
     }
 
     // 主界面（双面板）
@@ -111,10 +123,14 @@ export component AppWindow inherits Window {
         padding: 20px;
         spacing: 15px;
         visible: !root.show-settings && !root.quick-upload-mode;
-
         HorizontalBox {
             alignment: space-between;
-            Text { text: "Flick ⚡"; font-size: 24px; font-weight: 700; }
+            Text {
+                text: "Flick ⚡";
+                font-size: 24px;
+                font-weight: 700;
+            }
+
             Button {
                 text: "⚙️ 设置";
                 width: 80px;
@@ -122,9 +138,13 @@ export component AppWindow inherits Window {
                     root.show-settings = true;
                     root.current-settings-index = -1;
                     root.current-config = {
-                        name: "New Server", host: "", port: "22",
-                        user: "root", auth_type: "password",
-                        password: "", key_path: "",
+                        name: "New Server",
+                        host: "",
+                        port: "22",
+                        user: "root",
+                        auth_type: "password",
+                        password: "",
+                        key_path: "",
                         default_target_dir: "/tmp"
                     };
                 }
@@ -137,13 +157,26 @@ export component AppWindow inherits Window {
             LocalPanel {
                 current-path: root.local-path;
                 files: root.local-files;
-                navigate(p) => { root.local-navigate(p); }
-                go-up() => { root.local-go-up(); }
-                file-clicked(i) => { root.local-file-clicked(i); }
-                file-double-clicked(i) => { root.local-file-double-clicked(i); }
-                refresh() => { root.local-refresh(); }
-                select-all() => { root.local-select-all(); }
+                navigate(p) => {
+                    root.local-navigate(p);
+                }
+                go-up() => {
+                    root.local-go-up();
+                }
+                file-clicked(i) => {
+                    root.local-file-clicked(i);
+                }
+                file-double-clicked(i) => {
+                    root.local-file-double-clicked(i);
+                }
+                refresh() => {
+                    root.local-refresh();
+                }
+                select-all() => {
+                    root.local-select-all();
+                }
             }
+
             RemotePanel {
                 current-path: root.remote-path;
                 files: root.remote-files;
@@ -151,17 +184,40 @@ export component AppWindow inherits Window {
                 connected: root.remote-connected;
                 connecting: root.remote-connecting;
                 status-text: root.remote-status;
-                connect(idx) => { root.remote-connect(idx); }
-                disconnect() => { root.remote-disconnect(); }
-                navigate(p) => { root.remote-navigate(p); }
-                go-up() => { root.remote-go-up(); }
-                file-clicked(i) => { root.remote-file-clicked(i); }
-                file-double-clicked(i) => { root.remote-file-double-clicked(i); }
-                refresh() => { root.remote-refresh(); }
-                select-all() => { root.remote-select-all(); }
-                mkdir(name) => { root.remote-mkdir(name); }
-                delete-selected() => { root.remote-delete-selected(); }
-                rename-item(i, name) => { root.remote-rename(i, name); }
+                current-server-index <=> root.remote-server-index;
+                connect(idx) => {
+                    root.remote-connect(idx);
+                }
+                disconnect() => {
+                    root.remote-disconnect();
+                }
+                navigate(p) => {
+                    root.remote-navigate(p);
+                }
+                go-up() => {
+                    root.remote-go-up();
+                }
+                file-clicked(i) => {
+                    root.remote-file-clicked(i);
+                }
+                file-double-clicked(i) => {
+                    root.remote-file-double-clicked(i);
+                }
+                refresh() => {
+                    root.remote-refresh();
+                }
+                select-all() => {
+                    root.remote-select-all();
+                }
+                mkdir(name) => {
+                    root.remote-mkdir(name);
+                }
+                delete-selected() => {
+                    root.remote-delete-selected();
+                }
+                rename-item(i, name) => {
+                    root.remote-rename(i, name);
+                }
             }
         }
 
@@ -171,18 +227,22 @@ export component AppWindow inherits Window {
             spacing: 20px;
             padding-top: 10px;
             padding-bottom: 10px;
-
             Button {
                 text: "↑ 上传选中文件";
                 enabled: root.remote-connected;
                 width: 150px;
-                clicked => { root.upload-selected(); }
+                clicked => {
+                    root.upload-selected();
+                }
             }
+
             Button {
                 text: "↓ 下载选中文件";
                 enabled: root.remote-connected;
                 width: 150px;
-                clicked => { root.download-selected(); }
+                clicked => {
+                    root.download-selected();
+                }
             }
         }
 
@@ -190,7 +250,9 @@ export component AppWindow inherits Window {
         TransferPanel {
             tasks: root.transfer-tasks;
             has-tasks: root.has-transfer-tasks;
-            clear-completed => { root.clear-completed-transfers(); }
+            clear-completed => {
+                root.clear-completed-transfers();
+            }
         }
     }
 
@@ -207,12 +269,21 @@ export component AppWindow inherits Window {
         test-log <=> root.test-log;
         show-log <=> root.show-log;
         ssh-key-hint: root.ssh-key-hint;
-
-        save-config(idx, cfg) => { root.save-config(idx, cfg); }
-        delete-config(idx) => { root.delete-config(idx); }
-        pick-key-file() => { root.pick-key-file(); }
-        load-config(idx) => { root.load-config(idx); }
-        test-connection(cfg) => { root.test-connection(cfg); }
+        save-config(idx, cfg) => {
+            root.save-config(idx, cfg);
+        }
+        delete-config(idx) => {
+            root.delete-config(idx);
+        }
+        pick-key-file() => {
+            root.pick-key-file();
+        }
+        load-config(idx) => {
+            root.load-config(idx);
+        }
+        test-connection(cfg) => {
+            root.test-connection(cfg);
+        }
         close-settings() => {
             root.show-settings = false;
             root.test-result = "";
@@ -230,7 +301,6 @@ export component AppWindow inherits Window {
         border-width: 1px;
         border-color: #fca5a5;
         z: 200;
-
         HorizontalLayout {
             padding-left: 12px;
             padding-right: 8px;
@@ -241,10 +311,13 @@ export component AppWindow inherits Window {
                 horizontal-stretch: 1;
                 overflow: elide;
             }
+
             Button {
                 text: "✕";
                 width: 30px;
-                clicked => { root.global-error = ""; }
+                clicked => {
+                    root.global-error = "";
+                }
             }
         }
     }

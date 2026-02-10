@@ -9,20 +9,18 @@ export struct FileEntry {
 export component FileItem inherits Rectangle {
     in property <FileEntry> entry;
     in property <bool> highlighted: false;
-
     callback clicked();
     callback double-clicked();
-
     height: 30px;
     border-radius: 3px;
-    background: root.highlighted ? #e3f2fd
-        : entry.selected ? #bbdefb
-        : touch.has-hover ? #f5f5f5
-        : transparent;
-
+    background: root.highlighted ? #e3f2fd : entry.selected ? #bbdefb : touch.has-hover ? #f5f5f5 : transparent;
     touch := TouchArea {
-        clicked => { root.clicked(); }
-        double-clicked => { root.double-clicked(); }
+        clicked => {
+            root.clicked();
+        }
+        double-clicked => {
+            root.double-clicked();
+        }
     }
 
     HorizontalLayout {
@@ -31,8 +29,8 @@ export component FileItem inherits Rectangle {
         spacing: 8px;
 
         // 图标
-        Text {
-            text: entry.is_dir ? "📁" : "📄";
+        Image {
+            source: entry.is_dir ? @image-url("../assets/folder.svg") : @image-url("../assets/file.svg");
             width: 20px;
             vertical-alignment: center;
         }

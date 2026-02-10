@@ -1,15 +1,24 @@
-import { Button, ComboBox, LineEdit, HorizontalBox } from "std-widgets.slint";
+import {
+    Button,
+    ComboBox,
+    LineEdit,
+    HorizontalBox,
+    CheckBox,
+} from "std-widgets.slint";
 import { ServerConfigUI } from "../types.slint";
 
 export component SettingsPage inherits Rectangle {
     background: #ffffff;
-
     in property <[string]> servers;
     in-out property <int> current-settings-index: -1;
     in-out property <ServerConfigUI> current-config: {
-        name: "New Server", host: "", port: "22",
-        user: "root", auth_type: "password",
-        password: "", key_path: "",
+        name: "New Server",
+        host: "",
+        port: "22",
+        user: "root",
+        auth_type: "password",
+        password: "",
+        key_path: "",
         default_target_dir: "/tmp"
     };
     in-out property <string> test-result: "";
@@ -18,14 +27,12 @@ export component SettingsPage inherits Rectangle {
     in-out property <string> test-log: "";
     in-out property <bool> show-log: false;
     in property <string> ssh-key-hint: "留空自动探测";
-
     callback save-config(int, ServerConfigUI);
     callback delete-config(int);
     callback pick-key-file();
     callback load-config(int);
     callback test-connection(ServerConfigUI);
     callback close-settings();
-
     HorizontalLayout {
         padding: 20px;
         spacing: 20px;
@@ -42,6 +49,7 @@ export component SettingsPage inherits Rectangle {
                     height: 30px;
                     vertical-alignment: center;
                 }
+
                 Rectangle {
                     background: #f5f5f5;
                     border-radius: 4px;
@@ -49,8 +57,10 @@ export component SettingsPage inherits Rectangle {
                     border-width: 1px;
                     clip: true;
                     Flickable {
-                        x: 0px; y: 0px;
-                        width: 100%; height: 100%;
+                        x: 0px;
+                        y: 0px;
+                        width: 100%;
+                        height: 100%;
                         viewport-height: root.servers.length * 36px;
                         VerticalLayout {
                             alignment: start;
@@ -65,6 +75,7 @@ export component SettingsPage inherits Rectangle {
                                         root.load-config(i);
                                     }
                                 }
+
                                 HorizontalBox {
                                     padding-left: 5px;
                                     Text {
@@ -77,15 +88,20 @@ export component SettingsPage inherits Rectangle {
                         }
                     }
                 }
+
                 Button {
                     text: "+ 新建服务器";
                     height: 32px;
                     clicked => {
                         root.current-settings-index = -1;
                         root.current-config = {
-                            name: "New Server", host: "", port: "22",
-                            user: "root", auth_type: "password",
-                            password: "", key_path: "",
+                            name: "New Server",
+                            host: "",
+                            port: "22",
+                            user: "root",
+                            auth_type: "password",
+                            password: "",
+                            key_path: "",
                             default_target_dir: "/tmp"
                         };
                     }
@@ -93,7 +109,10 @@ export component SettingsPage inherits Rectangle {
             }
         }
 
-        Rectangle { width: 1px; background: #ddd; }
+        Rectangle {
+            width: 1px;
+            background: #ddd;
+        }
 
         // 右侧：编辑表单
         Rectangle {
@@ -105,33 +124,63 @@ export component SettingsPage inherits Rectangle {
                     font-size: 18px;
                     font-weight: 700;
                 }
+
                 GridLayout {
                     spacing: 10px;
                     Row {
-                        Text { text: "别名:"; vertical-alignment: center; }
+                        Text {
+                            text: "别名:";
+                            vertical-alignment: center;
+                        }
+
                         LineEdit {
                             text <=> root.current-config.name;
                             placeholder-text: "例如: 阿里云 Shanghai";
                         }
                     }
+
                     Row {
-                        Text { text: "Host:"; vertical-alignment: center; }
+                        Text {
+                            text: "Host:";
+                            vertical-alignment: center;
+                        }
+
                         HorizontalLayout {
                             spacing: 10px;
                             LineEdit {
                                 text <=> root.current-config.host;
                                 placeholder-text: "IP or Domain";
                             }
-                            Text { text: "Port:"; vertical-alignment: center; }
-                            LineEdit { text <=> root.current-config.port; width: 60px; }
+
+                            Text {
+                                text: "Port:";
+                                vertical-alignment: center;
+                            }
+
+                            LineEdit {
+                                text <=> root.current-config.port;
+                                width: 60px;
+                            }
                         }
                     }
+
                     Row {
-                        Text { text: "用户:"; vertical-alignment: center; }
-                        LineEdit { text <=> root.current-config.user; }
+                        Text {
+                            text: "用户:";
+                            vertical-alignment: center;
+                        }
+
+                        LineEdit {
+                            text <=> root.current-config.user;
+                        }
                     }
+
                     Row {
-                        Text { text: "认证:"; vertical-alignment: center; }
+                        Text {
+                            text: "认证:";
+                            vertical-alignment: center;
+                        }
+
                         ComboBox {
                             model: ["Password", "Key"];
                             current-index: root.current-config.auth_type == "key" ? 1 : 0;
@@ -140,11 +189,13 @@ export component SettingsPage inherits Rectangle {
                             }
                         }
                     }
+
                     Row {
                         Text {
                             text: root.current-config.auth_type == "password" ? "密码:" : "Key:";
                             vertical-alignment: center;
                         }
+
                         Rectangle {
                             HorizontalLayout {
                                 spacing: 5px;
@@ -162,14 +213,28 @@ export component SettingsPage inherits Rectangle {
                                 if root.current-config.auth_type == "key": Button {
                                     text: "...";
                                     width: 30px;
-                                    clicked => { root.pick-key-file(); }
+                                    clicked => {
+                                        root.pick-key-file();
+                                    }
                                 }
                             }
                         }
                     }
+
                     Row {
-                        Text { text: "目录:"; vertical-alignment: center; }
-                        LineEdit { text <=> root.current-config.default_target_dir; }
+                        LineEdit {
+                            text <=> root.current-config.default_target_dir;
+                        }
+                    }
+
+                    Row {
+                        Text {
+                            text: "";
+                        } // 占位
+                        CheckBox {
+                            text: "设为默认服务器 (启动时自动选中)";
+                            checked <=> root.current-config.is_default;
+                        }
                     }
                 }
 
@@ -182,15 +247,19 @@ export component SettingsPage inherits Rectangle {
                         visible: root.test-result != "";
                         wrap: word-wrap;
                     }
+
                     HorizontalLayout {
                         alignment: start;
                         Button {
                             text: root.show-log ? "隐藏日志" : "查看详细日志";
                             height: 30px;
                             visible: root.test-log != "";
-                            clicked => { root.show-log = !root.show-log; }
+                            clicked => {
+                                root.show-log = !root.show-log;
+                            }
                         }
                     }
+
                     if root.show-log: Rectangle {
                         background: #f0f0f0;
                         border-radius: 4px;
@@ -209,7 +278,9 @@ export component SettingsPage inherits Rectangle {
                     }
                 }
 
-                Rectangle { height: 10px; }
+                Rectangle {
+                    height: 10px;
+                }
 
                 HorizontalLayout {
                     alignment: end;
@@ -217,9 +288,15 @@ export component SettingsPage inherits Rectangle {
                     Button {
                         text: "删除";
                         visible: root.current-settings-index != -1;
-                        clicked => { root.delete-config(root.current-settings-index); }
+                        clicked => {
+                            root.delete-config(root.current-settings-index);
+                        }
                     }
-                    Rectangle { width: 10px; }
+
+                    Rectangle {
+                        width: 10px;
+                    }
+
                     Button {
                         text: root.is-testing ? "连接中..." : "测试连接";
                         enabled: !root.is-testing;
@@ -229,10 +306,14 @@ export component SettingsPage inherits Rectangle {
                             root.test-connection(root.current-config);
                         }
                     }
+
                     Button {
                         text: "关闭";
-                        clicked => { root.close-settings(); }
+                        clicked => {
+                            root.close-settings();
+                        }
                     }
+
                     Button {
                         text: root.current-settings-index == -1 ? "保存" : "更新";
                         primary: true;
