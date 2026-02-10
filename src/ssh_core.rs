@@ -562,6 +562,68 @@ impl SshUploader {
         }
     }
 
+    fn upload_dir_recursive(
+        &mut self,
+        local_dir: &Path,
+        remote_dir: &Path,
+        callback: &dyn Fn(f32),
+    ) -> Result<()> {
+        // 在远程创建目标目录
+        self.remote_mkdir(remote_dir)?;
+
+        let entries: Vec<_> = std::fs::read_dir(local_dir)
+            .with_context(|| format!("无法读取本地目录: {:?}", local_dir))?
+            .filter_map(|e| e.ok())
+            .collect();
+
+        let total = entries.len();
+        for (i, entry) in entries.iter().enumerate() {
+            let path = entry.path();
+            let name = entry.file_name();
+            let remote_child = remote_dir.join(&name);
+
+            if path.is_dir() {
+                self.upload_dir_recursive(&path, &remote_child, callback)?;
+            } else {
+                self.upload(&path, &remote_child, callback)?;
+            }
+
+            if total > 0 {
+                callback((i + 1) as f32 / total as f32);
+            }
+        }
+        Ok(())
+    }
+
+    fn download_dir_recursive(
+        &mut self,
+        remote_dir: &Path,
+        local_dir: &Path,
+        callback: &dyn Fn(f32),
+    ) -> Result<()> {
+        std::fs::create_dir_all(local_dir)
+            .with_context(|| format!("无法创建本地目录: {:?}", local_dir))?;
+
+        let remote_str = remote_dir.to_string_lossy().replace('\\', "/");
+        let entries = crate::remote_fs::list_dir_sftp(self, &remote_str)?;
+
+        let total = entries.len();
+        for (i, entry) in entries.iter().enumerate() {
+            let remote_child = remote_dir.join(&entry.name);
+            let local_child = local_dir.join(&entry.name);
+
+            if entry.is_dir {
+                self.download_dir_recursive(&remote_child, &local_child, callback)?;
+            } else {
+                self.download(&remote_child, &local_child, callback)?;
+            }
+
+            if total > 0 {
+                callback((i + 1) as f32 / total as f32);
+            }
+        }
+        Ok(())
+    }
 }
 
 impl FileTransfer for SshUploader {
@@ -603,31 +665,7 @@ impl FileTransfer for SshUploader {
         remote_dir: &Path,
         callback: impl Fn(f32),
     ) -> Result<()> {
-        // 在远程创建目标目录
-        self.remote_mkdir(remote_dir)?;
-
-        let entries: Vec<_> = std::fs::read_dir(local_dir)
-            .with_context(|| format!("无法读取本地目录: {:?}", local_dir))?
-            .filter_map(|e| e.ok())
-            .collect();
-
-        let total = entries.len();
-        for (i, entry) in entries.iter().enumerate() {
-            let path = entry.path();
-            let name = entry.file_name();
-            let remote_child = remote_dir.join(&name);
-
-            if path.is_dir() {
-                self.upload_dir(&path, &remote_child, &callback)?;
-            } else {
-                self.upload(&path, &remote_child, &callback)?;
-            }
-
-            if total > 0 {
-                callback((i + 1) as f32 / total as f32);
-            }
-        }
-        Ok(())
+        self.upload_dir_recursive(local_dir, remote_dir, &callback)
     }
 
     fn download_dir(
@@ -636,27 +674,6 @@ impl FileTransfer for SshUploader {
         local_dir: &Path,
         callback: impl Fn(f32),
     ) -> Result<()> {
-        std::fs::create_dir_all(local_dir)
-            .with_context(|| format!("无法创建本地目录: {:?}", local_dir))?;
-
-        let remote_str = remote_dir.to_string_lossy().replace('\\', "/");
-        let entries = crate::remote_fs::list_dir_sftp(self, &remote_str)?;
-
-        let total = entries.len();
-        for (i, entry) in entries.iter().enumerate() {
-            let remote_child = remote_dir.join(&entry.name);
-            let local_child = local_dir.join(&entry.name);
-
-            if entry.is_dir {
-                self.download_dir(&remote_child, &local_child, &callback)?;
-            } else {
-                self.download(&remote_child, &local_child, &callback)?;
-            }
-
-            if total > 0 {
-                callback((i + 1) as f32 / total as f32);
-            }
-        }
-        Ok(())
+        self.download_dir_recursive(remote_dir, local_dir, &callback)
     }
 }
