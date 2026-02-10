@@ -16,6 +16,24 @@ pub trait FileTransfer {
         remote_path: &Path,
         callback: impl Fn(f32),
     ) -> Result<()>;
+
+    /// 下载文件
+    /// callback: 进度回调,参数为 0.0 - 1.0 的浮点数
+    fn download(
+        &mut self,
+        remote_path: &Path,
+        local_path: &Path,
+        callback: impl Fn(f32),
+    ) -> Result<()>;
+}
+
+/// 认证模式标记
+#[derive(Debug, Clone, PartialEq)]
+pub enum AuthMode {
+    /// libssh2 原生认证成功，session 可用
+    LibSsh2,
+    /// libssh2 失败，回退到系统 ssh/scp 命令
+    NativeSsh,
 }
 
 /// SSH/SFTP 上传器
@@ -23,6 +41,7 @@ pub struct SshUploader {
     session: Session,
     _tcp: TcpStream, // 保持 TCP 连接存活
     config: ServerConfig, // 保存配置以便使用 SCP
+    auth_mode: AuthMode,
 }
 
 
@@ -168,7 +187,7 @@ impl SshUploader {
             Ok(_) => {
                 if session.authenticated() {
                     log!("最终认证状态: 已连接");
-                    (Ok(Self { session, _tcp: tcp, config: config.clone() }), logs)
+                    (Ok(Self { session, _tcp: tcp, config: config.clone(), auth_mode: AuthMode::LibSsh2 }), logs)
                 } else {
                     log!("Session 标记为未认证");
                     (Err(anyhow!("认证未通过")), logs)
@@ -187,7 +206,7 @@ impl SshUploader {
                         log!("💡 当前可以正常使用文件上传功能(将使用系统 scp 命令)");
                         
                         // 返回成功状态,允许上传操作继续
-                        (Ok(Self { session, _tcp: tcp, config: config.clone() }), logs)
+                        (Ok(Self { session, _tcp: tcp, config: config.clone(), auth_mode: AuthMode::NativeSsh }), logs)
                     }
                     Err(nt_e) => {
                         log!("❌ 原生 SSH 也失败: {}", nt_e);
@@ -204,6 +223,21 @@ impl SshUploader {
     pub fn connect(config: &ServerConfig) -> Result<Self> {
         let (res, _) = Self::connect_with_log(config);
         res
+    }
+
+    /// 获取 SSH session 引用（仅 LibSsh2 模式下有效）
+    pub fn session(&self) -> &Session {
+        &self.session
+    }
+
+    /// 获取认证模式
+    pub fn auth_mode(&self) -> &AuthMode {
+        &self.auth_mode
+    }
+
+    /// 获取服务器配置
+    pub fn config(&self) -> &ServerConfig {
+        &self.config
     }
 }
 
@@ -357,6 +391,116 @@ impl SshUploader {
         callback(1.0);
         Ok(())
     }
+
+    /// 使用 SFTP 下载文件
+    fn download_via_sftp(
+        &mut self,
+        remote_path: &Path,
+        local_path: &Path,
+        callback: impl Fn(f32),
+    ) -> Result<()> {
+        let sftp = self.session.sftp().with_context(|| "无法建立 SFTP 会话")?;
+
+        let mut remote_file = sftp
+            .open(remote_path)
+            .with_context(|| format!("无法打开远程文件: {:?}", remote_path))?;
+
+        // 获取远程文件大小
+        let stat = remote_file.stat()?;
+        let total_size = stat.size.unwrap_or(0);
+
+        // 确保本地目录存在
+        if let Some(parent) = local_path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("无法创建本地目录: {:?}", parent))?;
+        }
+
+        let mut local_file = File::create(local_path)
+            .with_context(|| format!("无法创建本地文件: {:?}", local_path))?;
+
+        let mut buffer = [0u8; 8192];
+        let mut transferred = 0u64;
+
+        loop {
+            let bytes_read = remote_file.read(&mut buffer)?;
+            if bytes_read == 0 {
+                break;
+            }
+            local_file.write_all(&buffer[..bytes_read])?;
+
+            transferred += bytes_read as u64;
+            if total_size > 0 {
+                let progress = transferred as f32 / total_size as f32;
+                callback(progress);
+            }
+        }
+
+        callback(1.0);
+        Ok(())
+    }
+
+    /// 使用 SCP 命令下载文件
+    fn download_via_scp(
+        config: &ServerConfig,
+        remote_path: &Path,
+        local_path: &Path,
+        callback: impl Fn(f32),
+    ) -> Result<()> {
+        use std::process::Command;
+        
+        callback(0.0);
+        
+        // 确保 scp 命令可用
+        if Command::new("scp").arg("-V").output().is_err() {
+            return Err(anyhow!("系统中未找到 scp 命令,请安装 OpenSSH 客户端"));
+        }
+
+        // 确保本地目录存在
+        if let Some(parent) = local_path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("无法创建本地目录: {:?}", parent))?;
+        }
+        
+        // 构建 scp 命令
+        let mut cmd = Command::new("scp");
+        cmd.arg("-P").arg(config.port.to_string())
+           .arg("-o").arg("StrictHostKeyChecking=no")
+           .arg("-o").arg("BatchMode=yes"); // 禁止交互式密码输入
+        
+        // 如果指定了密钥路径
+        if let Some(key_path) = &config.key_path {
+            if !key_path.is_empty() {
+                cmd.arg("-i").arg(key_path);
+            }
+        }
+        
+        // Windows 下隐藏窗口
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        
+        // 源文件和目标
+        cmd.arg(format!("{}@{}:{}", config.user, config.host, remote_path.to_string_lossy()));
+        cmd.arg(local_path);
+        
+        callback(0.1); // 准备完成
+        
+        // 执行下载
+        let output = cmd.output()
+            .with_context(|| "无法执行 scp 命令")?;
+        
+        if output.status.success() {
+            callback(1.0);
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(anyhow!("SCP 下载失败: {}", stderr.trim()))
+        }
+    }
+
 }
 
 impl FileTransfer for SshUploader {
@@ -366,12 +510,29 @@ impl FileTransfer for SshUploader {
         remote_path: &Path,
         callback: impl Fn(f32),
     ) -> Result<()> {
-        // 优先尝试 SCP（支持新版 OpenSSH 密钥格式）
+        // 优先尝试 SCP(支持新版 OpenSSH 密钥格式)
         match Self::upload_via_scp(&self.config, local_path, remote_path, &callback) {
             Ok(_) => Ok(()),
             Err(scp_err) => {
-                // SCP 失败，回退到 SFTP（兼容旧格式密钥）
+                // SCP 失败,回退到 SFTP(兼容旧格式密钥)
                 self.upload_via_sftp(local_path, remote_path, callback)
+                    .with_context(|| format!("SCP 和 SFTP 均失败。SCP 错误: {}", scp_err))
+            }
+        }
+    }
+
+    fn download(
+        &mut self,
+        remote_path: &Path,
+        local_path: &Path,
+        callback: impl Fn(f32),
+    ) -> Result<()> {
+        // 优先尝试 SCP(支持新版 OpenSSH 密钥格式)
+        match Self::download_via_scp(&self.config, remote_path, local_path, &callback) {
+            Ok(_) => Ok(()),
+            Err(scp_err) => {
+                // SCP 失败,回退到 SFTP(兼容旧格式密钥)
+                self.download_via_sftp(remote_path, local_path, callback)
                     .with_context(|| format!("SCP 和 SFTP 均失败。SCP 错误: {}", scp_err))
             }
         }

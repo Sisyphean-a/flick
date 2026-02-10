@@ -27,6 +27,9 @@ dirs = "5.0"
 # 文件选择对话框
 rfd = "0.12"
 
+# 文件时间格式化
+chrono = "0.4"
+
 [build-dependencies]
 slint-build = "1.9"
 

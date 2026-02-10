@@ -1,0 +1,62 @@
+import { ProgressIndicator } from "std-widgets.slint";
+
+export struct TransferEntry {
+    file_name: string,
+    direction: string,  // "↑" upload, "↓" download
+    progress: float,
+    status: string,     // "pending", "progress", "done", "failed"
+    error_msg: string,
+}
+
+export component TransferItem inherits Rectangle {
+    in property <TransferEntry> entry;
+    height: 36px;
+    border-radius: 3px;
+    background: touch.has-hover ? #f5f5f5 : transparent;
+
+    touch := TouchArea {}
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 8px;
+
+        // 方向图标
+        Text {
+            text: entry.direction;
+            width: 20px;
+            vertical-alignment: center;
+            font-size: 14px;
+        }
+
+        // 文件名
+        Text {
+            text: entry.file_name;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+        }
+
+        // 进度条
+        Rectangle {
+            width: 80px;
+            ProgressIndicator {
+                progress: entry.progress;
+                height: 6px;
+            }
+        }
+
+        // 状态
+        Text {
+            text: entry.status == "done" ? "✅"
+                : entry.status == "failed" ? "❌"
+                : entry.status == "progress"
+                    ? Math.round(entry.progress * 100) + "%"
+                    : "⏳";
+            width: 40px;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            font-size: 12px;
+        }
+    }
+}

@@ -1,35 +1,16 @@
 import {
-    Button,
-    VerticalBox,
-    ComboBox,
-    LineEdit,
-    ProgressIndicator,
-    HorizontalBox,
-    GroupBox,
+    Button, VerticalBox, ComboBox, LineEdit,
+    ProgressIndicator, HorizontalBox, GroupBox,
 } from "std-widgets.slint";
 
-import {
-    Button,
-    VerticalBox,
-    ComboBox,
-    LineEdit,
-    ProgressIndicator,
-    HorizontalBox,
-    GroupBox,
-    StandardListView,
-    GridBox,
-} from "std-widgets.slint";
-
-export struct ServerConfigUI {
-    name: string,
-    host: string,
-    port: string,
-    user: string,
-    auth_type: string, // "password" or "key"
-    password: string,
-    key_path: string,
-    default_target_dir: string,
-}
+import { SettingsPage } from "pages/settings_page.slint";
+import { ServerConfigUI } from "types.slint";
+import { FileEntry } from "components/file_item.slint";
+import { LocalPanel } from "panels/local_panel.slint";
+import { RemotePanel } from "panels/remote_panel.slint";
+import { TransferEntry } from "components/transfer_item.slint";
+import { TransferPanel } from "panels/transfer_panel.slint";
+export { ServerConfigUI, FileEntry, TransferEntry }
 
 export component AppWindow inherits Window {
     title: "Flick 文件传输";
@@ -37,478 +18,165 @@ export component AppWindow inherits Window {
     min-height: 500px;
     default-font-family: "Microsoft YaHei";
 
-    // 输入属性
-    in property <string> file-path: "未选择文件";
-    // 远程目录 (默认从配置加载，可修改)
-    in-out property <string> target-dir: "/tmp";
-    in property <float> progress: 0.0;
-    in property <string> status-log: "等待操作...";
-    in property <[string]> servers: ["本地测试服务器"];
-    in property <bool> is-uploading: false;
-    
-    // 配置相关
     in-out property <bool> show-settings: false;
-    in-out property <int> current-settings-index: -1; // -1 表示新建
+    in-out property <int> current-settings-index: -1;
     in-out property <ServerConfigUI> current-config: {
-        name: "New Server",
-        host: "127.0.0.1",
-        port: "22",
-        user: "root",
-        auth_type: "password", // "password" | "key"
-        password: "",
-        key_path: "",
+        name: "New Server", host: "127.0.0.1", port: "22",
+        user: "root", auth_type: "password",
+        password: "", key_path: "",
         default_target_dir: "/tmp"
     };
 
-    // 回调函数
-    callback start-upload(int);
-    callback cancel-upload();
-    callback save-config(int, ServerConfigUI); // index, config
-    callback delete-config(int); // index
-    callback pick-file(); // 浏览传输文件
-    callback pick-key-file(); // 浏览密钥文件
-    callback load-config(int); // 加载指定索引的配置到表单
-    callback server-selected(int); // 主界面服务器切换
-    callback test-connection(ServerConfigUI); // 测试连接
+    callback save-config(int, ServerConfigUI);
+    callback delete-config(int);
+    callback pick-key-file();
+    callback load-config(int);
+    callback test-connection(ServerConfigUI);
 
-    // 测试结果反馈
     in-out property <string> test-result: "";
     in-out property <bool> test-success: false;
     in-out property <bool> is-testing: false;
-    
-    // 详细日志
     in-out property <string> test-log: "";
     in-out property <bool> show-log: false;
-    
-    // SSH Key 提示文案 (动态生成的路径)
     in property <string> ssh-key-hint: "留空自动探测 (Agent/Default)";
+
+    in property <[string]> servers: ["本地测试服务器"];
+
+    // 本地文件浏览器
+    in property <string> local-path: "";
+    in property <[FileEntry]> local-files: [];
+    callback local-navigate(string);
+    callback local-go-up();
+    callback local-file-clicked(int);
+    callback local-file-double-clicked(int);
+    callback local-refresh();
+
+    // 远程文件浏览器
+    in property <string> remote-path: "/";
+    in property <[FileEntry]> remote-files: [];
+    in property <bool> remote-connected: false;
+    in property <bool> remote-connecting: false;
+    in property <string> remote-status: "";
+    callback remote-connect(int);
+    callback remote-disconnect();
+    callback remote-navigate(string);
+    callback remote-go-up();
+    callback remote-file-clicked(int);
+    callback remote-file-double-clicked(int);
+    callback remote-refresh();
+
+    // 传输队列
+    in property <[TransferEntry]> transfer-tasks: [];
+    in property <bool> has-transfer-tasks: false;
+    callback clear-completed-transfers();
+    callback upload-selected();
+    callback download-selected();
+
+    // 主界面
     VerticalBox {
         padding: 20px;
         spacing: 15px;
         visible: !root.show-settings;
+
         HorizontalBox {
             alignment: space-between;
-            Text {
-                text: "Flick ⚡";
-                font-size: 24px;
-                font-weight: 700;
-            }
-
+            Text { text: "Flick ⚡"; font-size: 24px; font-weight: 700; }
             Button {
                 text: "⚙️ 设置";
                 width: 80px;
                 clicked => {
                     root.show-settings = true;
-                        // 默认进入新建模式或保持上次状态? 
-                        // 这里简单处理：每次打开设置重置为新建
-                        root.current-settings-index = -1;
+                    root.current-settings-index = -1;
                     root.current-config = {
-                        name: "New Server",
-                        host: "",
-                        port: "22",
-                        user: "root",
-                        auth_type: "password",
-                        password: "",
-                        key_path: "",
+                        name: "New Server", host: "", port: "22",
+                        user: "root", auth_type: "password",
+                        password: "", key_path: "",
                         default_target_dir: "/tmp"
                     };
                 }
             }
         }
 
-        GroupBox {
-            title: "目标文件";
-            HorizontalBox {
-                spacing: 5px;
-                LineEdit {
-                    text: root.file-path;
-                    enabled: false; // 只读，通过按钮选择
-                        horizontal-alignment: left;
-                }
-
-                Button {
-                    text: "📂 浏览";
-                    width: 80px;
-                    clicked => {
-                        root.pick-file();
-                    }
-                }
-            }
-        }
-
-        HorizontalBox {
+        // 双面板文件浏览器
+        HorizontalLayout {
             spacing: 10px;
-            Text {
-                text: "选择服务器:";
-                vertical-alignment: center;
-                width: 80px;
+            LocalPanel {
+                current-path: root.local-path;
+                files: root.local-files;
+                navigate(p) => { root.local-navigate(p); }
+                go-up() => { root.local-go-up(); }
+                file-clicked(i) => { root.local-file-clicked(i); }
+                file-double-clicked(i) => { root.local-file-double-clicked(i); }
+                refresh() => { root.local-refresh(); }
             }
-
-            server-combo := ComboBox {
-                model: root.servers;
-                current-index: 0;
-                width: 60%;
-                enabled: !root.is-uploading;
-                selected(val) => {
-                    root.server-selected(self.current-index);
-                }
-            }
-        }
-
-        HorizontalBox {
-            spacing: 10px;
-            Text {
-                text: "远程目录:";
-                vertical-alignment: center;
-                width: 80px;
-            }
-
-            LineEdit {
-                text <=> root.target-dir;
-                placeholder-text: "/tmp";
-                enabled: !root.is-uploading;
+            RemotePanel {
+                current-path: root.remote-path;
+                files: root.remote-files;
+                servers: root.servers;
+                connected: root.remote-connected;
+                connecting: root.remote-connecting;
+                status-text: root.remote-status;
+                connect(idx) => { root.remote-connect(idx); }
+                disconnect() => { root.remote-disconnect(); }
+                navigate(p) => { root.remote-navigate(p); }
+                go-up() => { root.remote-go-up(); }
+                file-clicked(i) => { root.remote-file-clicked(i); }
+                file-double-clicked(i) => { root.remote-file-double-clicked(i); }
+                refresh() => { root.remote-refresh(); }
             }
         }
 
-        VerticalBox {
-            spacing: 5px;
-            Text {
-                text: "传输进度: " + Math.round(root.progress * 100) + "%";
-                font-size: 12px;
-                color: #888;
-            }
-
-            ProgressIndicator {
-                progress: root.progress;
-                height: 8px;
-            }
-        }
-
-        Text {
-            text: root.status-log;
-            color: root.is-uploading ? #007bff : #666;
-            horizontal-alignment: center;
-        }
-
+        // 传输操作按钮
         HorizontalBox {
             alignment: center;
+            spacing: 20px;
+            padding-top: 10px;
+            padding-bottom: 10px;
+
             Button {
-                text: root.is-uploading ? "取消" : "开始传输";
-                primary: true;
-                width: 120px;
-                height: 36px;
-                enabled: !root.is-uploading;
-                clicked => {
-                    if (!root.is-uploading) {
-                        root.start-upload(server-combo.current-index);
-                    }
-                }
+                text: "↑ 上传选中文件";
+                enabled: root.remote-connected;
+                width: 150px;
+                clicked => { root.upload-selected(); }
             }
+            Button {
+                text: "↓ 下载选中文件";
+                enabled: root.remote-connected;
+                width: 150px;
+                clicked => { root.download-selected(); }
+            }
+        }
+
+        // 传输队列面板
+        TransferPanel {
+            tasks: root.transfer-tasks;
+            has-tasks: root.has-transfer-tasks;
+            clear-completed => { root.clear-completed-transfers(); }
         }
     }
 
-        // 设置覆盖层
-        Rectangle {
-        background: #ffffff;
+    // 设置覆盖层
+    settings := SettingsPage {
         visible: root.show-settings;
         z: 100;
-        HorizontalLayout {
-            padding: 20px;
-            spacing: 20px;
+        servers: root.servers;
+        current-settings-index <=> root.current-settings-index;
+        current-config <=> root.current-config;
+        test-result <=> root.test-result;
+        test-success <=> root.test-success;
+        is-testing <=> root.is-testing;
+        test-log <=> root.test-log;
+        show-log <=> root.show-log;
+        ssh-key-hint: root.ssh-key-hint;
 
-                // 左侧：服务器列表
-                Rectangle {
-                width: 200px;
-                VerticalLayout {
-                    spacing: 10px;
-                    Text {
-                        text: "服务器列表";
-                        font-size: 16px;
-                        font-weight: 700;
-                        height: 30px;
-                        vertical-alignment: center;
-                    }
-                        
-                        // 列表区域容器，限制高度
-                        Rectangle {
-                        background: #f5f5f5;
-                        border-radius: 4px;
-                        border-color: #e0e0e0;
-                        border-width: 1px;
-                        clip: true; // 确保内容不溢出
-                            
-                            Flickable {
-                            x: 0px;
-                            y: 0px;
-                            width: 100%;
-                            height: 100%;
-                            viewport-height: root.servers.length * 36px;
-                            VerticalLayout {
-                                alignment: start;
-                                padding: 5px;
-                                for server[i] in root.servers: Rectangle {
-                                    height: 36px;
-                                    border-radius: 4px;
-                                    background: root.current-settings-index == i ? #d0e8ff : transparent;
-                                    TouchArea {
-                                        clicked => {
-                                            root.current-settings-index = i;
-                                            root.load-config(i);
-                                        }
-                                    }
-
-                                    HorizontalBox {
-                                        padding-left: 5px;
-                                        Text {
-                                            text: server;
-                                            vertical-alignment: center;
-                                            overflow: elide;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Button {
-                        text: "+ 新建服务器";
-                        height: 32px;
-                        clicked => {
-                            root.current-settings-index = -1;
-                                // 重置表单
-                                root.current-config = {
-                                name: "New Server",
-                                host: "",
-                                port: "22",
-                                user: "root",
-                                auth_type: "password",
-                                password: "",
-                                key_path: "",
-                                default_target_dir: "/tmp"
-                            };
-                        }
-                    }
-                }
-            }
-                
-                // 垂直分割线
-                Rectangle {
-                width: 1px;
-                background: #ddd;
-            }
-
-                // 右侧：编辑表单
-                Rectangle {
-                    // 自动填充剩余宽度
-                    VerticalLayout {
-                    spacing: 12px;
-                    alignment: start;
-                    Text {
-                        text: root.current-settings-index == -1 ? "新建服务器" : "编辑服务器";
-                        font-size: 18px;
-                        font-weight: 700;
-                    }
-
-                        // 表单区域
-                        GridLayout {
-                        spacing: 10px;
-                        Row {
-                            Text {
-                                text: "别名:";
-                                vertical-alignment: center;
-                            }
-
-                            LineEdit {
-                                text <=> root.current-config.name;
-                                placeholder-text: "例如: 阿里云 Shanghai";
-                            }
-                        }
-
-                        Row {
-                            Text {
-                                text: "Host:";
-                                vertical-alignment: center;
-                            }
-
-                            HorizontalLayout {
-                                spacing: 10px;
-                                LineEdit {
-                                    text <=> root.current-config.host;
-                                    placeholder-text: "IP or Domain";
-                                }
-
-                                Text {
-                                    text: "Port:";
-                                    vertical-alignment: center;
-                                }
-
-                                LineEdit {
-                                    text <=> root.current-config.port;
-                                    width: 60px;
-                                }
-                            }
-                        }
-
-                        Row {
-                            Text {
-                                text: "用户:";
-                                vertical-alignment: center;
-                            }
-
-                            LineEdit {
-                                text <=> root.current-config.user;
-                            }
-                        }
-
-                        Row {
-                            Text {
-                                text: "认证:";
-                                vertical-alignment: center;
-                            }
-
-                            ComboBox {
-                                model: ["Password", "Key"];
-                                current-index: root.current-config.auth_type == "key" ? 1 : 0;
-                                selected(val) => {
-                                    root.current-config.auth_type = self.current-index == 1 ? "key" : "password";
-                                }
-                            }
-                        }
-                            // 动态显示密码或Key
-                            Row {
-                            Text {
-                                text: root.current-config.auth_type == "password" ? "密码:" : "Key:";
-                                vertical-alignment: center;
-                            }
-
-                            Rectangle {
-                                    // 包装容器以支持条件显示
-                                    HorizontalLayout {
-                                    spacing: 5px;
-                                    if (root.current-config.auth_type == "password"): LineEdit {
-                                        text <=> root.current-config.password;
-                                        input-type: password;
-                                        placeholder-text: "SSH Password";
-                                        width: 100%;
-                                    }
-                                    if (root.current-config.auth_type == "key"): LineEdit {
-                                        text <=> root.current-config.key_path;
-                                        placeholder-text: root.ssh-key-hint;
-                                        width: 100%;
-                                    }
-                                    if (root.current-config.auth_type == "key"): Button {
-                                        text: "...";
-                                        width: 30px;
-                                        clicked => {
-                                            root.pick-key-file();
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Row {
-                            Text {
-                                text: "目录:";
-                                vertical-alignment: center;
-                            }
-
-                            LineEdit {
-                                text <=> root.current-config.default_target_dir;
-                            }
-                        }
-                    }
-
-                        // 测试结果显示
-                        VerticalLayout {
-                        spacing: 5px;
-                        Text {
-                            text: root.test-result;
-                            color: root.test-success ? #28a745 : #dc3545;
-                            visible: root.test-result != "";
-                            wrap: word-wrap;
-                        }
-
-                        HorizontalLayout {
-                            alignment: start;
-                            Button {
-                                text: root.show-log ? "隐藏日志" : "查看详细日志";
-                                height: 30px;
-                                visible: root.test-log != "";
-                                clicked => {
-                                    root.show-log = !root.show-log;
-                                }
-                            }
-                        }
-
-                        if (root.show-log): Rectangle {
-                            background: #f0f0f0;
-                            border-radius: 4px;
-                            height: 150px;
-                            clip: true;
-                            Flickable {
-                                viewport-height: log-text.preferred-height;
-                                log-text := Text {
-                                    width: parent.width;
-                                    text: root.test-log;
-                                    wrap: word-wrap;
-                                    font-size: 11px;
-                                    color: #333;
-                                }
-                            }
-                        }
-                    }
-
-                        // 底部操作按钮 - 使用 Rectangle 包装以推到底部
-                        Rectangle {
-                        height: 10px;
-                    }
-
-                    HorizontalLayout {
-                        alignment: end;
-                        spacing: 10px;
-                        Button {
-                            text: "删除";
-                            visible: root.current-settings-index != -1;
-                            clicked => {
-                                root.delete-config(root.current-settings-index);
-                            }
-                        }
-
-                            // Spacer
-                            Rectangle {
-                            width: 10px;
-                        }
-
-                        Button {
-                            text: root.is-testing ? "连接中..." : "测试连接";
-                            enabled: !root.is-testing;
-                            clicked => {
-                                root.test-result = "正在尝试连接...";
-                                root.is-testing = true;
-                                root.test-connection(root.current-config);
-                            }
-                        }
-
-                        Button {
-                            text: "关闭";
-                            clicked => {
-                                root.show-settings = false;
-                                root.test-result = "";
-                            }
-                        }
-
-                        Button {
-                            text: root.current-settings-index == -1 ? "保存" : "更新";
-                            primary: true;
-                            clicked => {
-                                root.save-config(root.current-settings-index, root.current-config);
-                                root.test-result = "";
-                            }
-                        }
-                    }
-                }
-            }
+        save-config(idx, cfg) => { root.save-config(idx, cfg); }
+        delete-config(idx) => { root.delete-config(idx); }
+        pick-key-file() => { root.pick-key-file(); }
+        load-config(idx) => { root.load-config(idx); }
+        test-connection(cfg) => { root.test-connection(cfg); }
+        close-settings() => {
+            root.show-settings = false;
+            root.test-result = "";
         }
     }
 }

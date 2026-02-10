@@ -1,0 +1,99 @@
+import { Button } from "std-widgets.slint";
+import { FileEntry, FileItem } from "../components/file_item.slint";
+import { PathBreadcrumb } from "../components/path_breadcrumb.slint";
+import { ServerSelector } from "../components/server_selector.slint";
+
+export component RemotePanel inherits Rectangle {
+    in property <string> current-path: "/";
+    in property <[FileEntry]> files: [];
+    in property <[string]> servers: [];
+    in property <bool> connected: false;
+    in property <bool> connecting: false;
+    in property <string> status-text: "";
+
+    callback connect(int);
+    callback disconnect();
+    callback navigate(string);
+    callback go-up();
+    callback file-clicked(int);
+    callback file-double-clicked(int);
+    callback refresh();
+
+    border-width: 1px;
+    border-color: #e0e0e0;
+    border-radius: 4px;
+
+    VerticalLayout {
+        spacing: 0px;
+
+        // 标题栏
+        Rectangle {
+            height: 32px;
+            background: #f0f0f0;
+            HorizontalLayout {
+                padding-left: 10px;
+                padding-right: 4px;
+                Text {
+                    text: "远程文件";
+                    font-weight: 600;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+                Button {
+                    text: "🔄";
+                    width: 28px;
+                    enabled: root.connected;
+                    clicked => { root.refresh(); }
+                }
+            }
+        }
+
+        // 服务器选择
+        ServerSelector {
+            servers: root.servers;
+            connected: root.connected;
+            connecting: root.connecting;
+            connect(idx) => { root.connect(idx); }
+            disconnect() => { root.disconnect(); }
+        }
+
+        // 面包屑（连接后显示）
+        if root.connected: PathBreadcrumb {
+            current-path: root.current-path;
+            navigate(p) => { root.navigate(p); }
+            go-up() => { root.go-up(); }
+        }
+
+        // 文件列表 / 状态提示
+        Rectangle {
+            clip: true;
+
+            if root.connected: Flickable {
+                x: 0px; y: 0px;
+                width: 100%; height: 100%;
+                viewport-height: root.files.length * 30px;
+                VerticalLayout {
+                    alignment: start;
+                    for file[i] in root.files: FileItem {
+                        entry: file;
+                        clicked => { root.file-clicked(i); }
+                        double-clicked => {
+                            root.file-double-clicked(i);
+                        }
+                    }
+                }
+            }
+
+            if !root.connected: Text {
+                text: root.connecting
+                    ? "正在连接..."
+                    : root.status-text != ""
+                        ? root.status-text
+                        : "请选择服务器并连接";
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                color: #999;
+            }
+        }
+    }
+}

@@ -1,0 +1,65 @@
+export struct FileEntry {
+    name: string,
+    is_dir: bool,
+    size: string,
+    modified: string,
+    selected: bool,
+}
+
+export component FileItem inherits Rectangle {
+    in property <FileEntry> entry;
+    in property <bool> highlighted: false;
+
+    callback clicked();
+    callback double-clicked();
+
+    height: 30px;
+    border-radius: 3px;
+    background: root.highlighted ? #e3f2fd
+        : entry.selected ? #bbdefb
+        : touch.has-hover ? #f5f5f5
+        : transparent;
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+        double-clicked => { root.double-clicked(); }
+    }
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 8px;
+
+        // 图标
+        Text {
+            text: entry.is_dir ? "📁" : "📄";
+            width: 20px;
+            vertical-alignment: center;
+        }
+        // 文件名
+        Text {
+            text: entry.name;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+        }
+        // 大小
+        Text {
+            text: entry.is_dir ? "" : entry.size;
+            width: 80px;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+            color: #888;
+            font-size: 12px;
+        }
+        // 修改时间
+        Text {
+            text: entry.modified;
+            width: 120px;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+            color: #888;
+            font-size: 12px;
+        }
+    }
+}

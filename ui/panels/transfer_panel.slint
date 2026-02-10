@@ -1,0 +1,56 @@
+import { Button } from "std-widgets.slint";
+import { TransferEntry, TransferItem } from "../components/transfer_item.slint";
+
+export component TransferPanel inherits Rectangle {
+    in property <[TransferEntry]> tasks: [];
+    in property <bool> has-tasks: false;
+
+    callback clear-completed();
+
+    border-width: 1px;
+    border-color: #e0e0e0;
+    border-radius: 4px;
+    height: root.has-tasks ? 160px : 40px;
+
+    VerticalLayout {
+        spacing: 0px;
+
+        // 标题栏
+        Rectangle {
+            height: 32px;
+            background: #f0f0f0;
+            HorizontalLayout {
+                padding-left: 10px;
+                padding-right: 4px;
+                Text {
+                    text: "传输队列";
+                    font-weight: 600;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+                Button {
+                    text: "清除";
+                    width: 50px;
+                    visible: root.has-tasks;
+                    clicked => { root.clear-completed(); }
+                }
+            }
+        }
+
+        // 任务列表
+        if root.has-tasks: Rectangle {
+            clip: true;
+            Flickable {
+                x: 0px; y: 0px;
+                width: 100%; height: 100%;
+                viewport-height: root.tasks.length * 36px;
+                VerticalLayout {
+                    alignment: start;
+                    for task in root.tasks: TransferItem {
+                        entry: task;
+                    }
+                }
+            }
+        }
+    }
+}
