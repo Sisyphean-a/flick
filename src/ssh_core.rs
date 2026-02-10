@@ -3,13 +3,13 @@ use anyhow::{anyhow, Context, Result};
 use ssh2::Session;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::path::Path;
+use std::time::Duration;
 
 /// 文件传输接口 (方便未来扩展 FTP/S3)
 pub trait FileTransfer {
     /// 上传文件
-    /// callback: 进度回调，参数为 0.0 - 1.0 的浮点数
     fn upload(
         &mut self,
         local_path: &Path,
@@ -18,11 +18,26 @@ pub trait FileTransfer {
     ) -> Result<()>;
 
     /// 下载文件
-    /// callback: 进度回调,参数为 0.0 - 1.0 的浮点数
     fn download(
         &mut self,
         remote_path: &Path,
         local_path: &Path,
+        callback: impl Fn(f32),
+    ) -> Result<()>;
+
+    /// 上传目录（递归）
+    fn upload_dir(
+        &mut self,
+        local_dir: &Path,
+        remote_dir: &Path,
+        callback: impl Fn(f32),
+    ) -> Result<()>;
+
+    /// 下载目录（递归）
+    fn download_dir(
+        &mut self,
+        remote_dir: &Path,
+        local_dir: &Path,
         callback: impl Fn(f32),
     ) -> Result<()>;
 }
@@ -59,7 +74,14 @@ impl SshUploader {
 
         log!("开始连接到 {}:{} (User: {})...", config.host, config.port, config.user);
 
-        let tcp = match TcpStream::connect(format!("{}:{}", config.host, config.port)) {
+        let tcp = match format!("{}:{}", config.host, config.port)
+            .to_socket_addrs()
+            .and_then(|mut addrs| {
+                addrs
+                    .next()
+                    .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "无法解析地址"))
+                    .and_then(|addr| TcpStream::connect_timeout(&addr, Duration::from_secs(10)))
+            }) {
             Ok(s) => {
                 log!("TCP 连接成功");
                 s
@@ -78,7 +100,15 @@ impl SshUploader {
             }
         };
 
-        session.set_tcp_stream(tcp.try_clone().unwrap());
+        let tcp_clone = match tcp.try_clone() {
+            Ok(c) => c,
+            Err(e) => {
+                log!("TCP 克隆失败: {}", e);
+                return (Err(anyhow::Error::new(e).context("TCP 克隆失败")), logs);
+            }
+        };
+        session.set_tcp_stream(tcp_clone);
+        session.set_timeout(30_000);
         
         if let Err(e) = session.handshake() {
             log!("SSH 握手失败: {}", e);
@@ -238,6 +268,37 @@ impl SshUploader {
     /// 获取服务器配置
     pub fn config(&self) -> &ServerConfig {
         &self.config
+    }
+
+    /// 在远程创建目录（递归）
+    pub fn remote_mkdir(&self, path: &Path) -> Result<()> {
+        let path_str = path.to_string_lossy().replace('\\', "/");
+        if self.auth_mode == AuthMode::LibSsh2 {
+            let mut channel = self.session.channel_session()
+                .map_err(|e| anyhow!("创建 channel 失败: {}", e))?;
+            let _ = channel.exec(&format!("mkdir -p '{}'", path_str.replace('\'', "'\\''")));
+            let _ = channel.wait_close();
+        } else {
+            use std::process::Command;
+            let mut cmd = Command::new("ssh");
+            cmd.arg("-o").arg("BatchMode=yes")
+                .arg("-o").arg("StrictHostKeyChecking=no")
+                .arg("-p").arg(self.config.port.to_string());
+            if let Some(key) = &self.config.key_path {
+                if !key.is_empty() {
+                    cmd.arg("-i").arg(key);
+                }
+            }
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000);
+            }
+            cmd.arg(format!("{}@{}", self.config.user, self.config.host));
+            cmd.arg(format!("mkdir -p '{}'", path_str.replace('\'', "'\\''")));
+            let _ = cmd.output();
+        }
+        Ok(())
     }
 }
 
@@ -527,14 +588,75 @@ impl FileTransfer for SshUploader {
         local_path: &Path,
         callback: impl Fn(f32),
     ) -> Result<()> {
-        // 优先尝试 SCP(支持新版 OpenSSH 密钥格式)
         match Self::download_via_scp(&self.config, remote_path, local_path, &callback) {
             Ok(_) => Ok(()),
             Err(scp_err) => {
-                // SCP 失败,回退到 SFTP(兼容旧格式密钥)
                 self.download_via_sftp(remote_path, local_path, callback)
                     .with_context(|| format!("SCP 和 SFTP 均失败。SCP 错误: {}", scp_err))
             }
         }
+    }
+
+    fn upload_dir(
+        &mut self,
+        local_dir: &Path,
+        remote_dir: &Path,
+        callback: impl Fn(f32),
+    ) -> Result<()> {
+        // 在远程创建目标目录
+        self.remote_mkdir(remote_dir)?;
+
+        let entries: Vec<_> = std::fs::read_dir(local_dir)
+            .with_context(|| format!("无法读取本地目录: {:?}", local_dir))?
+            .filter_map(|e| e.ok())
+            .collect();
+
+        let total = entries.len();
+        for (i, entry) in entries.iter().enumerate() {
+            let path = entry.path();
+            let name = entry.file_name();
+            let remote_child = remote_dir.join(&name);
+
+            if path.is_dir() {
+                self.upload_dir(&path, &remote_child, &callback)?;
+            } else {
+                self.upload(&path, &remote_child, &callback)?;
+            }
+
+            if total > 0 {
+                callback((i + 1) as f32 / total as f32);
+            }
+        }
+        Ok(())
+    }
+
+    fn download_dir(
+        &mut self,
+        remote_dir: &Path,
+        local_dir: &Path,
+        callback: impl Fn(f32),
+    ) -> Result<()> {
+        std::fs::create_dir_all(local_dir)
+            .with_context(|| format!("无法创建本地目录: {:?}", local_dir))?;
+
+        let remote_str = remote_dir.to_string_lossy().replace('\\', "/");
+        let entries = crate::remote_fs::list_dir_sftp(self, &remote_str)?;
+
+        let total = entries.len();
+        for (i, entry) in entries.iter().enumerate() {
+            let remote_child = remote_dir.join(&entry.name);
+            let local_child = local_dir.join(&entry.name);
+
+            if entry.is_dir {
+                self.download_dir(&remote_child, &local_child, &callback)?;
+            } else {
+                self.download(&remote_child, &local_child, &callback)?;
+            }
+
+            if total > 0 {
+                callback((i + 1) as f32 / total as f32);
+            }
+        }
+        Ok(())
     }
 }

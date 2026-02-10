@@ -18,6 +18,10 @@ export component RemotePanel inherits Rectangle {
     callback file-clicked(int);
     callback file-double-clicked(int);
     callback refresh();
+    callback select-all();
+    callback mkdir(string);
+    callback delete-selected();
+    callback rename-item(int, string);
 
     border-width: 1px;
     border-color: #e0e0e0;
@@ -38,6 +42,24 @@ export component RemotePanel inherits Rectangle {
                     font-weight: 600;
                     vertical-alignment: center;
                     horizontal-stretch: 1;
+                }
+                Button {
+                    text: "📁+";
+                    width: 36px;
+                    enabled: root.connected;
+                    clicked => { root.mkdir("新建目录"); }
+                }
+                Button {
+                    text: "🗑";
+                    width: 28px;
+                    enabled: root.connected;
+                    clicked => { root.delete-selected(); }
+                }
+                Button {
+                    text: "☑";
+                    width: 28px;
+                    enabled: root.connected;
+                    clicked => { root.select-all(); }
                 }
                 Button {
                     text: "🔄";

@@ -53,6 +53,7 @@ pub fn bind(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
     bind_local_file_clicked(ui, local_state.clone());
     bind_local_double_click(ui, local_state.clone());
     bind_local_refresh(ui, local_state.clone());
+    bind_local_select_all(ui, local_state.clone());
 
     // 远程回调
     bind_remote_connect(ui, config, remote_state.clone());
@@ -62,10 +63,14 @@ pub fn bind(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
     bind_remote_file_clicked(ui, remote_state.clone());
     bind_remote_double_click(ui, remote_state.clone());
     bind_remote_refresh(ui, remote_state.clone());
+    bind_remote_select_all(ui, remote_state.clone());
+    bind_remote_mkdir(ui, remote_state.clone());
+    bind_remote_delete_selected(ui, remote_state.clone());
+    bind_remote_rename(ui, remote_state.clone());
 
     // 传输队列回调
-    bind_upload_selected(ui, local_state, remote_state.clone(), transfer_queue.clone());
-    bind_download_selected(ui, remote_state, transfer_queue.clone());
+    bind_upload_selected(ui, local_state.clone(), remote_state.clone(), transfer_queue.clone());
+    bind_download_selected(ui, local_state, remote_state, transfer_queue.clone());
     bind_clear_completed_transfers(ui, transfer_queue.clone());
 
     // 定时同步传输队列状态到 UI
@@ -211,6 +216,26 @@ fn bind_local_refresh(
     let ui_handle = ui.as_weak();
     ui.on_local_refresh(move || {
         if let Some(ui) = ui_handle.upgrade() {
+            refresh_local(&ui, &state);
+        }
+    });
+}
+
+fn bind_local_select_all(
+    ui: &AppWindow,
+    state: Arc<Mutex<LocalState>>,
+) {
+    let ui_handle = ui.as_weak();
+    ui.on_local_select_all(move || {
+        if let Some(ui) = ui_handle.upgrade() {
+            let mut s = state.lock().unwrap();
+            let total = s.cached_entries.len();
+            if s.selected_indices.len() == total {
+                s.selected_indices.clear();
+            } else {
+                s.selected_indices = (0..total).collect();
+            }
+            drop(s);
             refresh_local(&ui, &state);
         }
     });
@@ -487,6 +512,132 @@ fn bind_remote_refresh(
     });
 }
 
+fn bind_remote_select_all(
+    ui: &AppWindow,
+    state: Arc<Mutex<RemoteState>>,
+) {
+    let ui_handle = ui.as_weak();
+    ui.on_remote_select_all(move || {
+        if let Some(ui) = ui_handle.upgrade() {
+            let mut s = state.lock().unwrap();
+            let total = s.cached_entries.len();
+            if s.selected_indices.len() == total {
+                s.selected_indices.clear();
+            } else {
+                s.selected_indices = (0..total).collect();
+            }
+            let selected = s.selected_indices.clone();
+            let entries = s.cached_entries.clone();
+            drop(s);
+
+            let ui_entries = remote_entries_to_ui(&entries, &selected);
+            ui.set_remote_files(ModelRc::new(VecModel::from(ui_entries)));
+        }
+    });
+}
+
+fn bind_remote_mkdir(
+    ui: &AppWindow,
+    state: Arc<Mutex<RemoteState>>,
+) {
+    let ui_handle = ui.as_weak();
+    ui.on_remote_mkdir(move |dir_name| {
+        let s = state.lock().unwrap();
+        let uploader = match &s.uploader {
+            Some(u) => u,
+            None => return,
+        };
+        let current = s.current_path.clone();
+        let new_dir = if current.ends_with('/') {
+            format!("{}{}", current, dir_name)
+        } else {
+            format!("{}/{}", current, dir_name)
+        };
+        if let Err(e) = remote_fs::remote_mkdir(uploader, &new_dir) {
+            eprintln!("创建目录失败: {}", e);
+            return;
+        }
+        drop(s);
+        refresh_remote_dir(&state, &ui_handle, &current);
+        // 清除选择状态（refresh 后 selected 可能不对应）
+        let _ = state.lock().map(|mut s| {
+            s.selected_indices.clear();
+        });
+    });
+}
+
+fn bind_remote_delete_selected(
+    ui: &AppWindow,
+    state: Arc<Mutex<RemoteState>>,
+) {
+    let ui_handle = ui.as_weak();
+    ui.on_remote_delete_selected(move || {
+        let s = state.lock().unwrap();
+        let uploader = match &s.uploader {
+            Some(u) => u,
+            None => return,
+        };
+        let current = s.current_path.clone();
+        let to_delete: Vec<_> = s.selected_indices
+            .iter()
+            .filter_map(|&i| s.cached_entries.get(i))
+            .map(|e| {
+                let full_path = if current.ends_with('/') {
+                    format!("{}{}", current, e.name)
+                } else {
+                    format!("{}/{}", current, e.name)
+                };
+                (full_path, e.is_dir)
+            })
+            .collect();
+        for (path, is_dir) in &to_delete {
+            if let Err(e) = remote_fs::remote_remove(uploader, path, *is_dir) {
+                eprintln!("删除失败 {}: {}", path, e);
+            }
+        }
+        drop(s);
+        let mut s = state.lock().unwrap();
+        s.selected_indices.clear();
+        drop(s);
+        refresh_remote_dir(&state, &ui_handle, &current);
+    });
+}
+
+fn bind_remote_rename(
+    ui: &AppWindow,
+    state: Arc<Mutex<RemoteState>>,
+) {
+    let ui_handle = ui.as_weak();
+    ui.on_remote_rename(move |index, new_name| {
+        let s = state.lock().unwrap();
+        let uploader = match &s.uploader {
+            Some(u) => u,
+            None => return,
+        };
+        let current = s.current_path.clone();
+        let entry = match s.cached_entries.get(index as usize) {
+            Some(e) => e,
+            None => return,
+        };
+        let old_path = if current.ends_with('/') {
+            format!("{}{}", current, entry.name)
+        } else {
+            format!("{}/{}", current, entry.name)
+        };
+        let new_path = if current.ends_with('/') {
+            format!("{}{}", current, new_name)
+        } else {
+            format!("{}/{}", current, new_name)
+        };
+        if let Err(e) = remote_fs::remote_rename(uploader, &old_path, &new_path) {
+            eprintln!("重命名失败: {}", e);
+            return;
+        }
+        drop(s);
+        refresh_remote_dir(&state, &ui_handle, &current);
+    });
+}
+
 // ========== 传输队列 ==========
 
 fn bind_upload_selected(
@@ -495,7 +646,7 @@ fn bind_upload_selected(
     remote_state: Arc<Mutex<RemoteState>>,
     queue: Arc<Mutex<TransferQueue>>,
 ) {
-    let _ui_handle = ui.as_weak();
+    let ui_handle = ui.as_weak();
     ui.on_upload_selected(move || {
         let (local_files, remote_path, uploader_opt) = {
             let ls = local_state.lock().unwrap();
@@ -504,8 +655,7 @@ fn bind_upload_selected(
             let files: Vec<_> = ls.selected_indices
                 .iter()
                 .filter_map(|&i| ls.cached_entries.get(i))
-                .filter(|e| !e.is_dir)  // 只上传文件,不上传目录
-                .map(|e| (e.path.clone(), e.name.clone(), e.size))
+                .map(|e| (e.path.clone(), e.name.clone(), e.size, e.is_dir))
                 .collect();
             
             (files, rs.current_path.clone(), rs.uploader.as_ref().map(|u| u.config().clone()))
@@ -521,7 +671,7 @@ fn bind_upload_selected(
         };
 
         // 加入队列
-        for (local_path, file_name, size) in local_files {
+        for (local_path, file_name, size, is_dir) in local_files {
             let remote_file_path = if remote_path.ends_with('/') {
                 format!("{}{}", remote_path, file_name)
             } else {
@@ -539,9 +689,12 @@ fn bind_upload_selected(
                 )
             };
 
-            // 启动后台传输线程
+            // 启动后台上传线程
             let queue_clone = queue.clone();
             let cfg = uploader_config.clone();
+            let rs_clone = remote_state.clone();
+            let ui_h = ui_handle.clone();
+            let rp = remote_path.clone();
             thread::spawn(move || {
                 // 连接
                 let mut uploader = match SshUploader::connect(&cfg) {
@@ -553,23 +706,39 @@ fn bind_upload_selected(
                     }
                 };
 
-                // 上传
-                let result = uploader.upload(
-                    &local_path,
-                    Path::new(&remote_file_path),
-                    |progress| {
-                        let q_clone = queue_clone.clone();
-                        let _ = slint::invoke_from_event_loop(move || {
-                            let mut q = q_clone.lock().unwrap();
-                            q.update_progress(task_id, progress);
-                        });
-                    },
-                );
+                // 上传（文件或目录）
+                let progress_cb = |progress: f32| {
+                    let q_clone = queue_clone.clone();
+                    let _ = slint::invoke_from_event_loop(move || {
+                        let mut q = q_clone.lock().unwrap();
+                        q.update_progress(task_id, progress);
+                    });
+                };
+                let result = if is_dir {
+                    uploader.upload_dir(
+                        &local_path,
+                        Path::new(&remote_file_path),
+                        progress_cb,
+                    )
+                } else {
+                    uploader.upload(
+                        &local_path,
+                        Path::new(&remote_file_path),
+                        progress_cb,
+                    )
+                };
 
                 match result {
                     Ok(_) => {
                         let mut q = queue_clone.lock().unwrap();
                         q.mark_completed(task_id);
+                        // 上传完成后刷新远程目录
+                        let rs = rs_clone.clone();
+                        let uh = ui_h.clone();
+                        let path = rp.clone();
+                        let _ = slint::invoke_from_event_loop(move || {
+                            refresh_remote_dir(&rs, &uh, &path);
+                        });
                     }
                     Err(e) => {
                         let mut q = queue_clone.lock().unwrap();
@@ -583,31 +752,31 @@ fn bind_upload_selected(
 
 fn bind_download_selected(
     ui: &AppWindow,
+    local_state: Arc<Mutex<LocalState>>,
     remote_state: Arc<Mutex<RemoteState>>,
     queue: Arc<Mutex<TransferQueue>>,
 ) {
-    let _ui_handle = ui.as_weak();
+    let ui_handle = ui.as_weak();
     ui.on_download_selected(move || {
         let (remote_files, local_path, uploader_opt) = {
             let rs = remote_state.lock().unwrap();
-            
+            let ls = local_state.lock().unwrap();
+
             let files: Vec<_> = rs.selected_indices
                 .iter()
                 .filter_map(|&i| rs.cached_entries.get(i))
-                .filter(|e| !e.is_dir)  // 只下载文件,不下载目录
                 .map(|e| {
                     let remote_full_path = if rs.current_path.ends_with('/') {
                         format!("{}{}", rs.current_path, e.name)
                     } else {
                         format!("{}/{}", rs.current_path, e.name)
                     };
-                    (remote_full_path, e.name.clone(), e.size)
+                    (remote_full_path, e.name.clone(), e.size, e.is_dir)
                 })
                 .collect();
-            
-            // 使用当前工作目录作为下载目标
-            let local_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            
+
+            let local_dir = ls.current_path.clone();
+
             (files, local_dir, rs.uploader.as_ref().map(|u| u.config().clone()))
         };
 
@@ -621,7 +790,7 @@ fn bind_download_selected(
         };
 
         // 加入队列
-        for (remote_file_path, file_name, size) in remote_files {
+        for (remote_file_path, file_name, size, is_dir) in remote_files {
             let local_file_path = local_path.join(&file_name);
 
             let task_id = {
@@ -635,9 +804,11 @@ fn bind_download_selected(
                 )
             };
 
-            // 启动后台传输线程
+            // 启动后台下载线程
             let queue_clone = queue.clone();
             let cfg = uploader_config.clone();
+            let ls_clone = local_state.clone();
+            let ui_h = ui_handle.clone();
             thread::spawn(move || {
                 // 连接
                 let mut uploader = match SshUploader::connect(&cfg) {
@@ -649,23 +820,40 @@ fn bind_download_selected(
                     }
                 };
 
-                // 下载
-                let result = uploader.download(
-                    Path::new(&remote_file_path),
-                    &local_file_path,
-                    |progress| {
-                        let q_clone = queue_clone.clone();
-                        let _ = slint::invoke_from_event_loop(move || {
-                            let mut q = q_clone.lock().unwrap();
-                            q.update_progress(task_id, progress);
-                        });
-                    },
-                );
+                // 下载（文件或目录）
+                let progress_cb = |progress: f32| {
+                    let q_clone = queue_clone.clone();
+                    let _ = slint::invoke_from_event_loop(move || {
+                        let mut q = q_clone.lock().unwrap();
+                        q.update_progress(task_id, progress);
+                    });
+                };
+                let result = if is_dir {
+                    uploader.download_dir(
+                        Path::new(&remote_file_path),
+                        &local_file_path,
+                        progress_cb,
+                    )
+                } else {
+                    uploader.download(
+                        Path::new(&remote_file_path),
+                        &local_file_path,
+                        progress_cb,
+                    )
+                };
 
                 match result {
                     Ok(_) => {
                         let mut q = queue_clone.lock().unwrap();
                         q.mark_completed(task_id);
+                        // 下载完成后刷新本地目录
+                        let ls = ls_clone.clone();
+                        let uh = ui_h.clone();
+                        let _ = slint::invoke_from_event_loop(move || {
+                            if let Some(ui) = uh.upgrade() {
+                                refresh_local(&ui, &ls);
+                            }
+                        });
                     }
                     Err(e) => {
                         let mut q = queue_clone.lock().unwrap();

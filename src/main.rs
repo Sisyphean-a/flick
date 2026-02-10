@@ -36,8 +36,7 @@ fn main() -> anyhow::Result<()> {
 
     // 绑定回调
     ui_bridge::settings::bind(&ui, config.clone());
-    // Phase 4: 快速上传功能暂时禁用,将在 Phase 5 中重新实现
-    // ui_bridge::quick_upload::bind(&ui, config.clone());
+    ui_bridge::quick_upload::bind(&ui, config.clone());
     ui_bridge::explorer::bind(&ui, config);
 
     ui.run()?;
@@ -47,9 +46,12 @@ fn main() -> anyhow::Result<()> {
 fn init_ui_state(
     ui: &AppWindow,
     config: &Arc<Mutex<AppConfig>>,
-    _args: &Args,
+    args: &Args,
 ) {
-    let guard = config.lock().unwrap();
+    let guard = match config.lock() {
+        Ok(g) => g,
+        Err(_) => return,
+    };
 
     // 服务器列表
     let servers: Vec<SharedString> = guard
@@ -72,21 +74,19 @@ fn init_ui_state(
     };
     ui.set_ssh_key_hint(SharedString::from(ssh_hint));
 
-    // Phase 4: 以下代码暂时注释,将在 Phase 5 快速上传模式中恢复
-    /*
-    // 命令行文件参数
+    // 命令行文件参数 → 快速上传模式
     if let Some(path_str) = &args.file {
+        ui.set_quick_upload_mode(true);
         let display = utils::normalize_path(path_str)
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|_| path_str.clone());
         ui.set_file_path(SharedString::from(display));
-    }
 
-    // 默认目标目录
-    if let Some(first) = guard.servers.first() {
-        ui.set_target_dir(SharedString::from(
-            &first.default_target_dir,
-        ));
+        // 默认目标目录
+        if let Some(first) = guard.servers.first() {
+            ui.set_target_dir(SharedString::from(
+                &first.default_target_dir,
+            ));
+        }
     }
-    */
 }

@@ -25,9 +25,9 @@ pub fn list_dir(path: &Path) -> anyhow::Result<Vec<LocalEntry>> {
         let modified = metadata
             .modified()
             .ok()
-            .and_then(|t| {
+            .map(|t| {
                 let dt: DateTime<Local> = t.into();
-                Some(dt.format("%Y-%m-%d %H:%M").to_string())
+                dt.format("%Y-%m-%d %H:%M").to_string()
             })
             .unwrap_or_default();
 

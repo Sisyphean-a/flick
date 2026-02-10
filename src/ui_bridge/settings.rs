@@ -27,7 +27,10 @@ fn refresh_server_list(ui: &AppWindow, config: &AppConfig) {
 fn bind_save(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
     let ui_handle = ui.as_weak();
     ui.on_save_config(move |index, ui_config| {
-        let mut guard = config.lock().unwrap();
+        let mut guard = match config.lock() {
+            Ok(g) => g,
+            Err(_) => return,
+        };
         let new_server = convert::from_ui(&ui_config);
 
         if index == -1 {
@@ -50,7 +53,10 @@ fn bind_save(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
 fn bind_delete(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
     let ui_handle = ui.as_weak();
     ui.on_delete_config(move |index| {
-        let mut guard = config.lock().unwrap();
+        let mut guard = match config.lock() {
+            Ok(g) => g,
+            Err(_) => return,
+        };
         if index >= 0 && (index as usize) < guard.servers.len() {
             guard.servers.remove(index as usize);
             if let Err(e) = guard.save() {
@@ -68,7 +74,10 @@ fn bind_delete(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
 fn bind_load(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
     let ui_handle = ui.as_weak();
     ui.on_load_config(move |index| {
-        let guard = config.lock().unwrap();
+        let guard = match config.lock() {
+            Ok(g) => g,
+            Err(_) => return,
+        };
         if index >= 0 && (index as usize) < guard.servers.len() {
             let ui_config = convert::to_ui(&guard.servers[index as usize]);
             if let Some(ui) = ui_handle.upgrade() {

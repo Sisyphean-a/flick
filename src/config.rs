@@ -106,3 +106,41 @@ fn get_config_path() -> Result<PathBuf> {
     path.push("server.toml");
     Ok(path)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_server_config_default() {
+        let cfg = ServerConfig::default();
+        assert_eq!(cfg.port, 22);
+        assert_eq!(cfg.auth_type, "password");
+        assert!(cfg.password.is_some());
+        assert!(cfg.key_path.is_none());
+    }
+
+    #[test]
+    fn test_app_config_default() {
+        let cfg = AppConfig::default();
+        assert_eq!(cfg.servers.len(), 1);
+        assert_eq!(cfg.last_selected_index, 0);
+    }
+
+    #[test]
+    fn test_toml_roundtrip() {
+        let config = AppConfig::default();
+        let toml_str = toml::to_string_pretty(&config).unwrap();
+        let parsed: AppConfig = toml::from_str(&toml_str).unwrap();
+        assert_eq!(parsed.servers.len(), config.servers.len());
+        assert_eq!(parsed.servers[0].host, config.servers[0].host);
+        assert_eq!(parsed.servers[0].port, config.servers[0].port);
+    }
+
+    #[test]
+    fn test_config_path_not_empty() {
+        let path = get_config_path().unwrap();
+        assert!(path.to_string_lossy().contains("flick"));
+        assert!(path.to_string_lossy().contains("server.toml"));
+    }
+}

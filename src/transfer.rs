@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 /// 传输方向
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Direction {
     Upload,
@@ -9,7 +8,6 @@ pub enum Direction {
 }
 
 /// 传输任务状态
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum TransferStatus {
     Pending,
@@ -33,13 +31,11 @@ pub struct TransferTask {
 }
 
 /// 传输队列
-#[allow(dead_code)]
 pub struct TransferQueue {
     tasks: Vec<TransferTask>,
     next_id: usize,
 }
 
-#[allow(dead_code)]
 impl TransferQueue {
     pub fn new() -> Self {
         Self {
@@ -72,6 +68,7 @@ impl TransferQueue {
     }
 
     /// 获取下一个待处理任务
+    #[allow(dead_code)]
     pub fn next_pending(&mut self) -> Option<&mut TransferTask> {
         self.tasks
             .iter_mut()
@@ -113,5 +110,84 @@ impl TransferQueue {
     pub fn clear_completed(&mut self) {
         self.tasks
             .retain(|t| t.status != TransferStatus::Completed);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_queue_with_task() -> (TransferQueue, usize) {
+        let mut q = TransferQueue::new();
+        let id = q.enqueue(
+            Direction::Upload,
+            PathBuf::from("/local/file.txt"),
+            "/remote/file.txt".to_string(),
+            "file.txt".to_string(),
+            1024,
+        );
+        (q, id)
+    }
+
+    #[test]
+    fn test_enqueue_returns_incremental_ids() {
+        let mut q = TransferQueue::new();
+        let id0 = q.enqueue(Direction::Upload, PathBuf::from("a"), "r".into(), "a".into(), 0);
+        let id1 = q.enqueue(Direction::Download, PathBuf::from("b"), "r".into(), "b".into(), 0);
+        assert_eq!(id0, 0);
+        assert_eq!(id1, 1);
+    }
+
+    #[test]
+    fn test_enqueue_sets_pending() {
+        let (q, _) = make_queue_with_task();
+        let snap = q.snapshot();
+        assert_eq!(snap[0].status, TransferStatus::Pending);
+        assert_eq!(snap[0].progress, 0.0);
+    }
+
+    #[test]
+    fn test_next_pending() {
+        let (mut q, id) = make_queue_with_task();
+        let task = q.next_pending().unwrap();
+        assert_eq!(task.id, id);
+    }
+
+    #[test]
+    fn test_update_progress() {
+        let (mut q, id) = make_queue_with_task();
+        q.update_progress(id, 0.5);
+        let snap = q.snapshot();
+        assert_eq!(snap[0].progress, 0.5);
+        assert_eq!(snap[0].status, TransferStatus::InProgress);
+    }
+
+    #[test]
+    fn test_mark_completed() {
+        let (mut q, id) = make_queue_with_task();
+        q.mark_completed(id);
+        let snap = q.snapshot();
+        assert_eq!(snap[0].status, TransferStatus::Completed);
+        assert_eq!(snap[0].progress, 1.0);
+    }
+
+    #[test]
+    fn test_mark_failed() {
+        let (mut q, id) = make_queue_with_task();
+        q.mark_failed(id, "timeout".to_string());
+        let snap = q.snapshot();
+        assert_eq!(snap[0].status, TransferStatus::Failed("timeout".to_string()));
+    }
+
+    #[test]
+    fn test_clear_completed() {
+        let mut q = TransferQueue::new();
+        let id0 = q.enqueue(Direction::Upload, PathBuf::from("a"), "r".into(), "a".into(), 0);
+        let _id1 = q.enqueue(Direction::Upload, PathBuf::from("b"), "r".into(), "b".into(), 0);
+        q.mark_completed(id0);
+        q.clear_completed();
+        let snap = q.snapshot();
+        assert_eq!(snap.len(), 1);
+        assert_eq!(snap[0].status, TransferStatus::Pending);
     }
 }

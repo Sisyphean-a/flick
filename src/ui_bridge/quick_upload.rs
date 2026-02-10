@@ -33,7 +33,10 @@ fn bind_server_selected(
 ) {
     let ui_handle = ui.as_weak();
     ui.on_server_selected(move |index| {
-        let guard = config.lock().unwrap();
+        let guard = match config.lock() {
+            Ok(g) => g,
+            Err(_) => return,
+        };
         if index >= 0 && (index as usize) < guard.servers.len() {
             if let Some(ui) = ui_handle.upgrade() {
                 ui.set_target_dir(SharedString::from(
@@ -47,7 +50,10 @@ fn bind_server_selected(
 fn bind_start_upload(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
     let ui_handle = ui.as_weak();
     ui.on_start_upload(move |server_index| {
-        let ui = ui_handle.unwrap();
+        let ui = match ui_handle.upgrade() {
+            Some(ui) => ui,
+            None => return,
+        };
 
         let file_path_str = ui.get_file_path();
         if file_path_str == "未选择文件" {
@@ -61,7 +67,13 @@ fn bind_start_upload(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
             return;
         }
 
-        let config_guard = config.lock().unwrap();
+        let config_guard = match config.lock() {
+            Ok(g) => g,
+            Err(_) => {
+                ui.set_status_log("内部错误: 配置锁定失败".into());
+                return;
+            }
+        };
         if server_index < 0
             || server_index as usize >= config_guard.servers.len()
         {
@@ -121,7 +133,7 @@ fn execute_upload(
             );
         }
     })
-    .unwrap();
+    .ok();
 
     uploader.upload(&local_path, &remote_path, |progress| {
         let ui_copy = ui_handle.clone();

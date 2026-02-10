@@ -22,7 +22,10 @@ pub fn from_ui(ui_config: &ServerConfigUI) -> ServerConfig {
     ServerConfig {
         name: ui_config.name.to_string(),
         host: ui_config.host.to_string(),
-        port: ui_config.port.as_str().parse().unwrap_or(22),
+        port: ui_config.port.as_str().parse::<u16>()
+            .ok()
+            .filter(|&p| p >= 1)
+            .unwrap_or(22),
         user: ui_config.user.to_string(),
         auth_type: ui_config.auth_type.to_string(),
         password: if ui_config.password.is_empty() {

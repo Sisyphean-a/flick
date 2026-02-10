@@ -11,6 +11,7 @@ export component LocalPanel inherits Rectangle {
     callback file-clicked(int);
     callback file-double-clicked(int);
     callback refresh();
+    callback select-all();
 
     border-width: 1px;
     border-color: #e0e0e0;
@@ -31,6 +32,11 @@ export component LocalPanel inherits Rectangle {
                     font-weight: 600;
                     vertical-alignment: center;
                     horizontal-stretch: 1;
+                }
+                Button {
+                    text: "☑";
+                    width: 28px;
+                    clicked => { root.select-all(); }
                 }
                 Button {
                     text: "🔄";
