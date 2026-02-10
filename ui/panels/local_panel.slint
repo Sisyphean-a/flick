@@ -5,18 +5,15 @@ import { PathBreadcrumb } from "../components/path_breadcrumb.slint";
 export component LocalPanel inherits Rectangle {
     in property <string> current-path: "/";
     in property <[FileEntry]> files: [];
-
     callback navigate(string);
     callback go-up();
     callback file-clicked(int);
     callback file-double-clicked(int);
     callback refresh();
     callback select-all();
-
     border-width: 1px;
     border-color: #e0e0e0;
     border-radius: 4px;
-
     VerticalLayout {
         spacing: 0px;
 
@@ -33,15 +30,21 @@ export component LocalPanel inherits Rectangle {
                     vertical-alignment: center;
                     horizontal-stretch: 1;
                 }
+
                 Button {
-                    text: "☑";
-                    width: 28px;
-                    clicked => { root.select-all(); }
+                    text: "全选";
+                    width: 40px;
+                    clicked => {
+                        root.select-all();
+                    }
                 }
+
                 Button {
-                    text: "🔄";
-                    width: 28px;
-                    clicked => { root.refresh(); }
+                    text: "刷新";
+                    width: 40px;
+                    clicked => {
+                        root.refresh();
+                    }
                 }
             }
         }
@@ -49,23 +52,33 @@ export component LocalPanel inherits Rectangle {
         // 面包屑
         PathBreadcrumb {
             current-path: root.current-path;
-            navigate(p) => { root.navigate(p); }
-            go-up() => { root.go-up(); }
+            navigate(p) => {
+                root.navigate(p);
+            }
+            go-up() => {
+                root.go-up();
+            }
         }
 
         // 文件列表
         Rectangle {
             clip: true;
             Flickable {
-                x: 0px; y: 0px;
-                width: 100%; height: 100%;
+                x: 0px;
+                y: 0px;
+                width: 100%;
+                height: 100%;
                 viewport-height: root.files.length * 30px;
                 VerticalLayout {
                     alignment: start;
                     for file[i] in root.files: FileItem {
                         entry: file;
-                        clicked => { root.file-clicked(i); }
-                        double-clicked => { root.file-double-clicked(i); }
+                        clicked => {
+                            root.file-clicked(i);
+                        }
+                        double-clicked => {
+                            root.file-double-clicked(i);
+                        }
                     }
                 }
             }

@@ -43,8 +43,8 @@ export component RemotePanel inherits Rectangle {
                 }
 
                 Button {
-                    text: "📁+";
-                    width: 36px;
+                    text: "新建";
+                    width: 40px;
                     enabled: root.connected;
                     clicked => {
                         root.mkdir("新建目录");
@@ -52,8 +52,8 @@ export component RemotePanel inherits Rectangle {
                 }
 
                 Button {
-                    text: "🗑";
-                    width: 28px;
+                    text: "删除";
+                    width: 40px;
                     enabled: root.connected;
                     clicked => {
                         root.delete-selected();
@@ -61,8 +61,8 @@ export component RemotePanel inherits Rectangle {
                 }
 
                 Button {
-                    text: "☑";
-                    width: 28px;
+                    text: "全选";
+                    width: 40px;
                     enabled: root.connected;
                     clicked => {
                         root.select-all();
@@ -70,8 +70,8 @@ export component RemotePanel inherits Rectangle {
                 }
 
                 Button {
-                    text: "🔄";
-                    width: 28px;
+                    text: "刷新";
+                    width: 40px;
                     enabled: root.connected;
                     clicked => {
                         root.refresh();

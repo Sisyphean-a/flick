@@ -126,14 +126,14 @@ export component AppWindow inherits Window {
         HorizontalBox {
             alignment: space-between;
             Text {
-                text: "Flick ⚡";
+                text: "Flick";
                 font-size: 24px;
                 font-weight: 700;
             }
 
             Button {
-                text: "⚙️ 设置";
-                width: 80px;
+                text: "设置";
+                width: 60px;
                 clicked => {
                     root.show-settings = true;
                     root.current-settings-index = -1;
@@ -230,7 +230,7 @@ export component AppWindow inherits Window {
             padding-top: 10px;
             padding-bottom: 10px;
             Button {
-                text: "↑ 上传选中文件";
+                text: "上传选中文件";
                 enabled: root.remote-connected;
                 width: 150px;
                 clicked => {
@@ -239,7 +239,7 @@ export component AppWindow inherits Window {
             }
 
             Button {
-                text: "↓ 下载选中文件";
+                text: "下载选中文件";
                 enabled: root.remote-connected;
                 width: 150px;
                 clicked => {
@@ -315,8 +315,8 @@ export component AppWindow inherits Window {
             }
 
             Button {
-                text: "✕";
-                width: 30px;
+                text: "关闭";
+                width: 45px;
                 clicked => {
                     root.global-error = "";
                 }
