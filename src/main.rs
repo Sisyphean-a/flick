@@ -67,7 +67,13 @@ fn init_ui_state(
         .iter()
         .position(|s| s.is_default)
         .unwrap_or(0);
-    ui.set_remote_server_index(default_idx as i32);
+    let ui_handle = ui.as_weak();
+    slint::invoke_from_event_loop(move || {
+        if let Some(ui) = ui_handle.upgrade() {
+            ui.set_remote_server_index(default_idx as i32);
+        }
+    })
+    .unwrap();
 
     // SSH Key 提示
     let ssh_hint = match dirs::home_dir() {

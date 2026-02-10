@@ -155,6 +155,7 @@ export component AppWindow inherits Window {
         HorizontalLayout {
             spacing: 10px;
             LocalPanel {
+                width: 50%;
                 current-path: root.local-path;
                 files: root.local-files;
                 navigate(p) => {
@@ -178,6 +179,7 @@ export component AppWindow inherits Window {
             }
 
             RemotePanel {
+                width: 50%;
                 current-path: root.remote-path;
                 files: root.remote-files;
                 servers: root.servers;

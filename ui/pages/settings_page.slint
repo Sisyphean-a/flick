@@ -125,113 +125,144 @@ export component SettingsPage inherits Rectangle {
                     font-weight: 700;
                 }
 
-                GridLayout {
-                    spacing: 10px;
-                    Row {
+                VerticalLayout {
+                    spacing: 15px;
+
+                    // Row 1: Alias
+                    HorizontalLayout {
                         Text {
                             text: "别名:";
+                            width: 60px;
                             vertical-alignment: center;
                         }
 
                         LineEdit {
                             text <=> root.current-config.name;
                             placeholder-text: "例如: 阿里云 Shanghai";
+                            height: 30px;
                         }
                     }
 
-                    Row {
+                    // Row 2: Host & Port
+                    HorizontalLayout {
                         Text {
                             text: "Host:";
+                            width: 60px;
                             vertical-alignment: center;
                         }
 
-                        HorizontalLayout {
-                            spacing: 10px;
-                            LineEdit {
-                                text <=> root.current-config.host;
-                                placeholder-text: "IP or Domain";
-                            }
+                        LineEdit {
+                            text <=> root.current-config.host;
+                            placeholder-text: "IP or Domain";
+                            height: 30px;
+                            horizontal-stretch: 1;
+                        }
 
-                            Text {
-                                text: "Port:";
-                                vertical-alignment: center;
-                            }
+                        Rectangle {
+                            width: 10px;
+                        }
 
-                            LineEdit {
-                                text <=> root.current-config.port;
-                                width: 60px;
-                            }
+                        Text {
+                            text: "Port:";
+                            width: 40px;
+                            vertical-alignment: center;
+                        }
+
+                        LineEdit {
+                            text <=> root.current-config.port;
+                            width: 60px;
+                            height: 30px;
                         }
                     }
 
-                    Row {
+                    // Row 3: User
+                    HorizontalLayout {
                         Text {
                             text: "用户:";
+                            width: 60px;
                             vertical-alignment: center;
                         }
 
                         LineEdit {
                             text <=> root.current-config.user;
+                            height: 30px;
                         }
                     }
 
-                    Row {
+                    // Row 4: Auth Type
+                    HorizontalLayout {
                         Text {
                             text: "认证:";
+                            width: 60px;
                             vertical-alignment: center;
                         }
 
                         ComboBox {
                             model: ["Password", "Key"];
                             current-index: root.current-config.auth_type == "key" ? 1 : 0;
+                            height: 30px;
                             selected(val) => {
                                 root.current-config.auth_type = self.current-index == 1 ? "key" : "password";
                             }
                         }
                     }
 
-                    Row {
+                    // Row 5: Password / Key
+                    HorizontalLayout {
                         Text {
                             text: root.current-config.auth_type == "password" ? "密码:" : "Key:";
+                            width: 60px;
                             vertical-alignment: center;
                         }
 
-                        Rectangle {
-                            HorizontalLayout {
-                                spacing: 5px;
-                                if root.current-config.auth_type == "password": LineEdit {
-                                    text <=> root.current-config.password;
-                                    input-type: password;
-                                    placeholder-text: "SSH Password";
-                                    width: 100%;
-                                }
-                                if root.current-config.auth_type == "key": LineEdit {
-                                    text <=> root.current-config.key_path;
-                                    placeholder-text: root.ssh-key-hint;
-                                    width: 100%;
-                                }
-                                if root.current-config.auth_type == "key": Button {
-                                    text: "...";
-                                    width: 30px;
-                                    clicked => {
-                                        root.pick-key-file();
-                                    }
+                        if root.current-config.auth_type == "password": LineEdit {
+                            text <=> root.current-config.password;
+                            input-type: password;
+                            placeholder-text: "SSH Password";
+                            height: 30px;
+                            horizontal-stretch: 1;
+                        }
+                        if root.current-config.auth_type == "key": HorizontalLayout {
+                            horizontal-stretch: 1;
+                            spacing: 5px;
+                            LineEdit {
+                                text <=> root.current-config.key_path;
+                                placeholder-text: root.ssh-key-hint;
+                                height: 30px;
+                                horizontal-stretch: 1;
+                            }
+
+                            Button {
+                                text: "...";
+                                width: 40px;
+                                height: 30px;
+                                clicked => {
+                                    root.pick-key-file();
                                 }
                             }
                         }
                     }
 
-                    Row {
+                    // Row 6: Target Dir
+                    HorizontalLayout {
+                        Text {
+                            text: "目录:";
+                            width: 60px;
+                            vertical-alignment: center;
+                        }
+
                         LineEdit {
                             text <=> root.current-config.default_target_dir;
+                            height: 30px;
                         }
                     }
 
-                    Row {
+                    // Row 7: Default Server
+                    HorizontalLayout {
                         Text {
-                            text: "";
-                        } // 占位
-                        CheckBox {
+                            width: 60px;
+                        } // placeholder
+                         CheckBox {
                             text: "设为默认服务器 (启动时自动选中)";
                             checked <=> root.current-config.is_default;
                         }

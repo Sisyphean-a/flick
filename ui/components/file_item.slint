@@ -29,11 +29,16 @@ export component FileItem inherits Rectangle {
         spacing: 8px;
 
         // 图标
-        Image {
-            source: entry.is_dir ? @image-url("../assets/folder.svg") : @image-url("../assets/file.svg");
+        Rectangle {
             width: 20px;
-            vertical-alignment: center;
+            Image {
+                source: entry.is_dir ? @image-url("../assets/folder.svg") : @image-url("../assets/file.svg");
+                width: 100%;
+                height: 100%;
+                vertical-alignment: center;
+            }
         }
+        
         // 文件名
         Text {
             text: entry.name;
@@ -41,19 +46,21 @@ export component FileItem inherits Rectangle {
             overflow: elide;
             horizontal-stretch: 1;
         }
+
         // 大小
         Text {
             text: entry.is_dir ? "" : entry.size;
-            width: 80px;
+            width: 60px;
             vertical-alignment: center;
             horizontal-alignment: right;
             color: #888;
             font-size: 12px;
         }
+
         // 修改时间
         Text {
             text: entry.modified;
-            width: 120px;
+            width: 110px;
             vertical-alignment: center;
             horizontal-alignment: right;
             color: #888;
