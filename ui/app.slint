@@ -9,14 +9,16 @@ import {
 } from "std-widgets.slint";
 
 import { SettingsPage } from "pages/settings_page.slint";
-import { ServerConfigUI } from "types.slint";
+import { ServerConfigUI, BookmarkEntry } from "types.slint";
 import { FileEntry } from "components/file_item.slint";
 import { LocalPanel } from "panels/local_panel.slint";
 import { RemotePanel } from "panels/remote_panel.slint";
 import { TransferEntry } from "components/transfer_item.slint";
 import { TransferPanel } from "panels/transfer_panel.slint";
 import { QuickUploadPanel } from "panels/quick_upload_panel.slint";
-export { ServerConfigUI, FileEntry, TransferEntry }
+import { ConfirmDialog } from "components/confirm_dialog.slint";
+import { Style } from "theme/style.slint";
+export { ServerConfigUI, FileEntry, TransferEntry, BookmarkEntry }
 
 export component AppWindow inherits Window {
     title: "Flick 文件传输";
@@ -54,9 +56,18 @@ export component AppWindow inherits Window {
     callback local-navigate(string);
     callback local-go-up();
     callback local-file-clicked(int);
+    callback local-file-clicked-ex(int, bool, bool);
     callback local-file-double-clicked(int);
     callback local-refresh();
     callback local-select-all();
+    callback local-mkdir(string);
+    callback local-delete-selected();
+    callback local-rename(int, string);
+    callback local-sort-changed(string);
+    in-out property <string> local-sort-field: "name";
+    in-out property <bool> local-sort-ascending: true;
+    callback local-filter-changed(string);
+    in-out property <bool> local-show-search: false;
 
     // 远程文件浏览器
     in property <string> remote-path: "/";
@@ -70,17 +81,24 @@ export component AppWindow inherits Window {
     callback remote-navigate(string);
     callback remote-go-up();
     callback remote-file-clicked(int);
+    callback remote-file-clicked-ex(int, bool, bool);
     callback remote-file-double-clicked(int);
     callback remote-refresh();
     callback remote-select-all();
     callback remote-mkdir(string);
     callback remote-delete-selected();
     callback remote-rename(int, string);
+    callback remote-sort-changed(string);
+    in-out property <string> remote-sort-field: "name";
+    in-out property <bool> remote-sort-ascending: true;
+    callback remote-filter-changed(string);
+    in-out property <bool> remote-show-search: false;
 
     // 传输队列
     in property <[TransferEntry]> transfer-tasks: [];
     in property <bool> has-transfer-tasks: false;
     callback clear-completed-transfers();
+    callback retry-transfer(int);
     callback upload-selected();
     callback download-selected();
 
@@ -97,6 +115,32 @@ export component AppWindow inherits Window {
 
     // 全局错误提示
     in-out property <string> global-error: "";
+
+    // 书签
+    in property <[BookmarkEntry]> bookmarks: [];
+    in-out property <bool> show-bookmarks: false;
+    callback add-bookmark(string, string, string);  // name, path, side
+    callback remove-bookmark(int);
+    callback goto-bookmark(int);
+
+    // 状态栏
+    in property <int> local-file-count: 0;
+    in property <int> local-selected-count: 0;
+    in property <int> remote-file-count: 0;
+    in property <int> remote-selected-count: 0;
+
+    // 焦点面板: "local" 或 "remote"
+    in-out property <bool> focus-on-remote: false;
+
+    // 面板分割比例 (0.0 ~ 1.0，左面板占比)
+    in-out property <float> split-ratio: 0.5;
+
+    // 确认对话框
+    in-out property <bool> show-confirm: false;
+    in-out property <string> confirm-title: "确认";
+    in-out property <string> confirm-message: "";
+    in-out property <string> confirm-action: "";
+    callback confirm-accepted();
 
     // 快速上传面板
     QuickUploadPanel {
@@ -118,11 +162,44 @@ export component AppWindow inherits Window {
         }
     }
 
-    // 主界面（双面板）
+    // 主界面（双面板）+ 键盘快捷键
+    FocusScope {
+        visible: !root.show-settings && !root.quick-upload-mode;
+        key-pressed(event) => {
+            if (event.text == Key.Tab) {
+                root.focus-on-remote = !root.focus-on-remote;
+                return accept;
+            }
+            if (event.text == Key.F5) {
+                if (root.focus-on-remote) { root.remote-refresh(); }
+                else { root.local-refresh(); }
+                return accept;
+            }
+            if (event.text == Key.Delete) {
+                if (root.focus-on-remote) { root.remote-delete-selected(); }
+                else { root.local-delete-selected(); }
+                return accept;
+            }
+            if (event.text == Key.Backspace) {
+                if (root.focus-on-remote) { root.remote-go-up(); }
+                else { root.local-go-up(); }
+                return accept;
+            }
+            if (event.modifiers.control && event.text == "a") {
+                if (root.focus-on-remote) { root.remote-select-all(); }
+                else { root.local-select-all(); }
+                return accept;
+            }
+            if (event.modifiers.control && event.text == "f") {
+                if (root.focus-on-remote) { root.remote-show-search = !root.remote-show-search; }
+                else { root.local-show-search = !root.local-show-search; }
+                return accept;
+            }
+            return reject;
+        }
     VerticalBox {
         padding: 20px;
         spacing: 15px;
-        visible: !root.show-settings && !root.quick-upload-mode;
         HorizontalBox {
             alignment: space-between;
             Text {
@@ -152,10 +229,13 @@ export component AppWindow inherits Window {
         }
 
         // 双面板文件浏览器
-        HorizontalLayout {
-            spacing: 10px;
+        panels-area := Rectangle {
+            vertical-stretch: 1;
             LocalPanel {
-                width: 50%;
+                x: 0px;
+                y: 0px;
+                width: panels-area.width * root.split-ratio - 3px;
+                height: panels-area.height;
                 current-path: root.local-path;
                 files: root.local-files;
                 navigate(p) => {
@@ -167,6 +247,9 @@ export component AppWindow inherits Window {
                 file-clicked(i) => {
                     root.local-file-clicked(i);
                 }
+                file-clicked-ex(i, ctrl, shift) => {
+                    root.local-file-clicked-ex(i, ctrl, shift);
+                }
                 file-double-clicked(i) => {
                     root.local-file-double-clicked(i);
                 }
@@ -176,10 +259,58 @@ export component AppWindow inherits Window {
                 select-all() => {
                     root.local-select-all();
                 }
+                mkdir(name) => {
+                    root.local-mkdir(name);
+                }
+                delete-selected() => {
+                    root.local-delete-selected();
+                }
+                rename-item(i, name) => {
+                    root.local-rename(i, name);
+                }
+                sort-field: root.local-sort-field;
+                sort-ascending: root.local-sort-ascending;
+                sort-changed(field) => {
+                    root.local-sort-changed(field);
+                }
+                show-search: root.local-show-search;
+                filter-changed(text) => {
+                    root.local-filter-changed(text);
+                }
+                bookmarks: root.bookmarks;
+                add-bookmark() => {
+                    root.add-bookmark(root.local-path, root.local-path, "local");
+                }
+                goto-bookmark(i) => {
+                    root.goto-bookmark(i);
+                }
+                remove-bookmark(i) => {
+                    root.remove-bookmark(i);
+                }
+            }
+
+            // 分隔条
+            Rectangle {
+                x: panels-area.width * root.split-ratio - 3px;
+                y: 0px;
+                width: 6px;
+                height: panels-area.height;
+                background: splitter-touch.has-hover || splitter-touch.pressed ? Style.splitter-active : Style.splitter-default;
+                splitter-touch := TouchArea {
+                    mouse-cursor: col-resize;
+                    moved => {
+                        root.split-ratio = Math.max(0.2, Math.min(0.8,
+                            (self.mouse-x + panels-area.width * root.split-ratio - 3px) / panels-area.width
+                        ));
+                    }
+                }
             }
 
             RemotePanel {
-                width: 50%;
+                x: panels-area.width * root.split-ratio + 3px;
+                y: 0px;
+                width: panels-area.width * (1.0 - root.split-ratio) - 3px;
+                height: panels-area.height;
                 current-path: root.remote-path;
                 files: root.remote-files;
                 servers: root.servers;
@@ -202,6 +333,9 @@ export component AppWindow inherits Window {
                 file-clicked(i) => {
                     root.remote-file-clicked(i);
                 }
+                file-clicked-ex(i, ctrl, shift) => {
+                    root.remote-file-clicked-ex(i, ctrl, shift);
+                }
                 file-double-clicked(i) => {
                     root.remote-file-double-clicked(i);
                 }
@@ -219,6 +353,25 @@ export component AppWindow inherits Window {
                 }
                 rename-item(i, name) => {
                     root.remote-rename(i, name);
+                }
+                sort-field: root.remote-sort-field;
+                sort-ascending: root.remote-sort-ascending;
+                sort-changed(field) => {
+                    root.remote-sort-changed(field);
+                }
+                show-search: root.remote-show-search;
+                filter-changed(text) => {
+                    root.remote-filter-changed(text);
+                }
+                bookmarks: root.bookmarks;
+                add-bookmark() => {
+                    root.add-bookmark(root.remote-path, root.remote-path, "remote");
+                }
+                goto-bookmark(i) => {
+                    root.goto-bookmark(i);
+                }
+                remove-bookmark(i) => {
+                    root.remove-bookmark(i);
                 }
             }
         }
@@ -255,8 +408,70 @@ export component AppWindow inherits Window {
             clear-completed => {
                 root.clear-completed-transfers();
             }
+            retry-transfer(id) => {
+                root.retry-transfer(id);
+            }
         }
-    }
+
+        // 状态栏
+        Rectangle {
+            height: 28px;
+            background: Style.bg-status;
+            border-radius: 4px;
+            border-width: 1px;
+            border-color: Style.border-color;
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 12px;
+                spacing: 8px;
+                Text {
+                    text: "本地: " + root.local-file-count + " 项";
+                    vertical-alignment: center;
+                    font-size: 12px;
+                    color: Style.text-secondary;
+                }
+                if root.local-selected-count > 0: Text {
+                    text: "(" + root.local-selected-count + " 选中)";
+                    vertical-alignment: center;
+                    font-size: 12px;
+                    color: Style.link;
+                }
+                Rectangle { horizontal-stretch: 1; }
+                Rectangle {
+                    width: 12px;
+                    VerticalLayout {
+                        alignment: center;
+                        Rectangle {
+                            width: 8px;
+                            height: 8px;
+                            border-radius: 4px;
+                            background: root.remote-connected ? Style.connected : Style.disconnected;
+                        }
+                    }
+                }
+                Text {
+                    text: root.remote-connected ? "已连接" : "未连接";
+                    vertical-alignment: center;
+                    font-size: 12px;
+                    color: root.remote-connected ? Style.connected : Style.text-placeholder;
+                }
+                Rectangle { horizontal-stretch: 1; }
+                Text {
+                    text: "远程: " + root.remote-file-count + " 项";
+                    vertical-alignment: center;
+                    font-size: 12px;
+                    color: Style.text-secondary;
+                }
+                if root.remote-selected-count > 0: Text {
+                    text: "(" + root.remote-selected-count + " 选中)";
+                    vertical-alignment: center;
+                    font-size: 12px;
+                    color: Style.link;
+                }
+            }
+        }
+    } // VerticalBox
+    } // FocusScope
 
     // 设置覆盖层
     settings := SettingsPage {
@@ -292,23 +507,38 @@ export component AppWindow inherits Window {
         }
     }
 
+    // 确认对话框覆盖层
+    ConfirmDialog {
+        z: 150;
+        title: root.confirm-title;
+        message: root.confirm-message;
+        show: root.show-confirm;
+        confirmed() => {
+            root.show-confirm = false;
+            root.confirm-accepted();
+        }
+        cancelled() => {
+            root.show-confirm = false;
+        }
+    }
+
     // 全局错误提示条
     if root.global-error != "": Rectangle {
         x: 10px;
         y: root.height - 50px;
         width: root.width - 20px;
         height: 40px;
-        background: #fee2e2;
+        background: Style.bg-error;
         border-radius: 4px;
         border-width: 1px;
-        border-color: #fca5a5;
+        border-color: Style.border-error;
         z: 200;
         HorizontalLayout {
             padding-left: 12px;
             padding-right: 8px;
             Text {
                 text: root.global-error;
-                color: #991b1b;
+                color: Style.text-error;
                 vertical-alignment: center;
                 horizontal-stretch: 1;
                 overflow: elide;

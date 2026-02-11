@@ -1,14 +1,17 @@
-import { Button } from "std-widgets.slint";
+import { Button, LineEdit } from "std-widgets.slint";
+import { Style } from "../theme/style.slint";
 
 export component PathBreadcrumb inherits Rectangle {
     in property <string> current-path: "/";
     callback navigate(string);
     callback go-up();
+    in-out property <bool> editing: false;
+    in-out property <string> edit-text: "";
     height: 32px;
-    background: #f8f8f8;
+    background: Style.bg-input;
     border-radius: 4px;
     border-width: 1px;
-    border-color: #e0e0e0;
+    border-color: Style.border-color;
     HorizontalLayout {
         padding-left: 8px;
         padding-right: 4px;
@@ -21,12 +24,38 @@ export component PathBreadcrumb inherits Rectangle {
             }
         }
 
-        Text {
-            text: root.current-path;
-            vertical-alignment: center;
-            overflow: elide;
+        if !root.editing: TouchArea {
             horizontal-stretch: 1;
+            clicked => {
+                root.edit-text = root.current-path;
+                root.editing = true;
+            }
+            Text {
+                text: root.current-path;
+                vertical-alignment: center;
+                overflow: elide;
+                font-size: 13px;
+            }
+        }
+
+        if root.editing: edit-input := LineEdit {
+            horizontal-stretch: 1;
+            text: root.edit-text;
             font-size: 13px;
+            accepted(text) => {
+                root.editing = false;
+                if (text != "" && text != root.current-path) {
+                    root.navigate(text);
+                }
+            }
+        }
+
+        if root.editing: Button {
+            text: "取消";
+            width: 40px;
+            clicked => {
+                root.editing = false;
+            }
         }
     }
 }

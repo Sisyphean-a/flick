@@ -43,6 +43,15 @@ impl Default for ServerConfig {
     }
 }
 
+/// 书签
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Bookmark {
+    pub name: String,
+    pub path: String,
+    /// "local" 或 "remote"
+    pub side: String,
+}
+
 /// 应用全局配置
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppConfig {
@@ -50,6 +59,9 @@ pub struct AppConfig {
     pub servers: Vec<ServerConfig>,
     /// 上次选择的服务器索引
     pub last_selected_index: usize,
+    /// 书签列表
+    #[serde(default)]
+    pub bookmarks: Vec<Bookmark>,
 }
 
 impl Default for AppConfig {
@@ -57,6 +69,7 @@ impl Default for AppConfig {
         Self {
             servers: vec![ServerConfig::default()],
             last_selected_index: 0,
+            bookmarks: Vec::new(),
         }
     }
 }

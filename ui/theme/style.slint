@@ -1,19 +1,46 @@
 // 全局样式常量
 export global Style {
-    // 颜色
-    out property <color> primary: #007bff;
-    out property <color> success: #28a745;
-    out property <color> danger: #dc3545;
-    out property <color> warning: #ffc107;
+    // 背景色
+    out property <color> bg-app: #ffffff;
+    out property <color> bg-panel: #ffffff;
+    out property <color> bg-header: #f0f0f0;
+    out property <color> bg-light: #f5f5f5;
+    out property <color> bg-hover: #f5f5f5;
+    out property <color> bg-selected: #bbdefb;
+    out property <color> bg-selected-strong: #d0e8ff;
+    out property <color> bg-search: #fafafa;
+    out property <color> bg-bookmark: #fffde7;
+    out property <color> bg-bookmark-hover: #fff9c4;
+    out property <color> bg-status: #f0f0f0;
+    out property <color> bg-input: #f8f8f8;
+    out property <color> bg-error: #fee2e2;
+    out property <color> bg-overlay: #00000066;
+    out property <color> bg-dialog: #ffffff;
+
+    // 文字色
     out property <color> text-primary: #333333;
     out property <color> text-secondary: #666666;
     out property <color> text-muted: #888888;
-    out property <color> bg-white: #ffffff;
-    out property <color> bg-light: #f5f5f5;
-    out property <color> bg-hover: #e8e8e8;
-    out property <color> bg-selected: #d0e8ff;
+    out property <color> text-placeholder: #999999;
+    out property <color> text-error: #991b1b;
+
+    // 边框色
     out property <color> border-color: #e0e0e0;
+    out property <color> border-error: #fca5a5;
     out property <color> divider: #dddddd;
+
+    // 语义色
+    out property <color> primary: #007bff;
+    out property <color> success: #4caf50;
+    out property <color> danger: #d32f2f;
+    out property <color> warning: #ffc107;
+    out property <color> link: #1976d2;
+    out property <color> connected: #4caf50;
+    out property <color> disconnected: #bdbdbd;
+
+    // 排序列头
+    out property <color> sort-active: #333333;
+    out property <color> sort-inactive: #666666;
 
     // 字号
     out property <length> font-title: 24px;
@@ -32,4 +59,8 @@ export global Style {
     // 圆角
     out property <length> radius-sm: 4px;
     out property <length> radius-md: 8px;
+
+    // 分隔条
+    out property <color> splitter-default: #e0e0e0;
+    out property <color> splitter-active: #90caf9;
 }

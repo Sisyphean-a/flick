@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::time::Instant;
 
 /// 传输方向
 #[derive(Debug, Clone, PartialEq)]
@@ -28,6 +29,7 @@ pub struct TransferTask {
     pub size: u64,
     pub progress: f32,
     pub status: TransferStatus,
+    pub started_at: Option<Instant>,
 }
 
 /// 传输队列
@@ -63,6 +65,7 @@ impl TransferQueue {
             size,
             progress: 0.0,
             status: TransferStatus::Pending,
+            started_at: None,
         });
         id
     }
@@ -79,6 +82,9 @@ impl TransferQueue {
     pub fn update_progress(&mut self, id: usize, progress: f32) {
         if let Some(task) = self.tasks.iter_mut().find(|t| t.id == id)
         {
+            if task.started_at.is_none() {
+                task.started_at = Some(Instant::now());
+            }
             task.progress = progress;
             task.status = TransferStatus::InProgress;
         }
@@ -110,6 +116,24 @@ impl TransferQueue {
     pub fn clear_completed(&mut self) {
         self.tasks
             .retain(|t| t.status != TransferStatus::Completed);
+    }
+
+    /// 重试失败的任务，重置为 Pending 状态
+    pub fn retry(&mut self, id: usize) -> bool {
+        if let Some(task) = self.tasks.iter_mut().find(|t| t.id == id) {
+            if matches!(task.status, TransferStatus::Failed(_)) {
+                task.status = TransferStatus::Pending;
+                task.progress = 0.0;
+                task.started_at = None;
+                return true;
+            }
+        }
+        false
+    }
+
+    /// 根据 id 获取任务的克隆
+    pub fn get_task(&self, id: usize) -> Option<TransferTask> {
+        self.tasks.iter().find(|t| t.id == id).cloned()
     }
 }
 

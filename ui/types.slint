@@ -9,3 +9,9 @@ export struct ServerConfigUI {
     default_target_dir: string,
     is_default: bool,
 }
+
+export struct BookmarkEntry {
+    name: string,
+    path: string,
+    side: string,  // "local" or "remote"
+}

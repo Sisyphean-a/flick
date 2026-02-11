@@ -1,18 +1,23 @@
-import { ProgressIndicator } from "std-widgets.slint";
+import { Button, ProgressIndicator } from "std-widgets.slint";
+import { Style } from "../theme/style.slint";
 
 export struct TransferEntry {
+    task_id: int,
     file_name: string,
-    direction: string,  // "↑" upload, "↓" download
+    direction: string,
     progress: float,
-    status: string,     // "pending", "progress", "done", "failed"
+    status: string,
     error_msg: string,
+    speed: string,
+    eta: string,
 }
 
 export component TransferItem inherits Rectangle {
     in property <TransferEntry> entry;
+    callback retry(int);
     height: 36px;
     border-radius: 3px;
-    background: touch.has-hover ? #f5f5f5 : transparent;
+    background: touch.has-hover ? Style.bg-hover : transparent;
 
     touch := TouchArea {}
 
@@ -21,7 +26,6 @@ export component TransferItem inherits Rectangle {
         padding-right: 8px;
         spacing: 8px;
 
-        // 方向图标
         Text {
             text: entry.direction;
             width: 20px;
@@ -29,7 +33,6 @@ export component TransferItem inherits Rectangle {
             font-size: 14px;
         }
 
-        // 文件名
         Text {
             text: entry.file_name;
             vertical-alignment: center;
@@ -37,7 +40,6 @@ export component TransferItem inherits Rectangle {
             horizontal-stretch: 1;
         }
 
-        // 进度条
         Rectangle {
             width: 80px;
             ProgressIndicator {
@@ -46,17 +48,43 @@ export component TransferItem inherits Rectangle {
             }
         }
 
-        // 状态
         Text {
-            text: entry.status == "done" ? "✅"
-                : entry.status == "failed" ? "❌"
+            text: entry.status == "done" ? "已完成"
+                : entry.status == "failed" ? "失败"
                 : entry.status == "progress"
                     ? Math.round(entry.progress * 100) + "%"
-                    : "⏳";
-            width: 40px;
+                    : "等待";
+            width: 45px;
             vertical-alignment: center;
             horizontal-alignment: center;
             font-size: 12px;
+            color: entry.status == "failed" ? Style.danger : Style.text-secondary;
+        }
+
+        if entry.status == "progress" && entry.speed != "": Text {
+            text: entry.speed;
+            width: 65px;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            font-size: 11px;
+            color: Style.text-muted;
+        }
+
+        if entry.status == "progress" && entry.eta != "": Text {
+            text: entry.eta;
+            width: 55px;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            font-size: 11px;
+            color: Style.text-muted;
+        }
+
+        if entry.status == "failed": Button {
+            text: "重试";
+            width: 40px;
+            clicked => {
+                root.retry(root.entry.task_id);
+            }
         }
     }
 }

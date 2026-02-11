@@ -6,9 +6,10 @@ import {
     CheckBox,
 } from "std-widgets.slint";
 import { ServerConfigUI } from "../types.slint";
+import { Style } from "../theme/style.slint";
 
 export component SettingsPage inherits Rectangle {
-    background: #ffffff;
+    background: Style.bg-app;
     in property <[string]> servers;
     in-out property <int> current-settings-index: -1;
     in-out property <ServerConfigUI> current-config: {
@@ -51,10 +52,9 @@ export component SettingsPage inherits Rectangle {
                 }
 
                 Rectangle {
-                    background: #f5f5f5;
+                    background: Style.bg-light;
                     border-radius: 4px;
-                    border-color: #e0e0e0;
-                    border-width: 1px;
+                    border-color: Style.border-color;
                     clip: true;
                     Flickable {
                         x: 0px;
@@ -68,7 +68,7 @@ export component SettingsPage inherits Rectangle {
                             for server[i] in root.servers: Rectangle {
                                 height: 36px;
                                 border-radius: 4px;
-                                background: root.current-settings-index == i ? #d0e8ff : transparent;
+                                background: root.current-settings-index == i ? Style.bg-selected-strong : transparent;
                                 TouchArea {
                                     clicked => {
                                         root.current-settings-index = i;
@@ -111,7 +111,7 @@ export component SettingsPage inherits Rectangle {
 
         Rectangle {
             width: 1px;
-            background: #ddd;
+            background: Style.divider;
         }
 
         // 右侧：编辑表单
@@ -284,7 +284,7 @@ export component SettingsPage inherits Rectangle {
                     spacing: 5px;
                     Text {
                         text: root.test-result;
-                        color: root.test-success ? #28a745 : #dc3545;
+                        color: root.test-success ? Style.success : Style.danger;
                         visible: root.test-result != "";
                         wrap: word-wrap;
                     }
@@ -302,7 +302,7 @@ export component SettingsPage inherits Rectangle {
                     }
 
                     if root.show-log: Rectangle {
-                        background: #f0f0f0;
+                        background: Style.bg-header;
                         border-radius: 4px;
                         height: 150px;
                         clip: true;
@@ -313,7 +313,7 @@ export component SettingsPage inherits Rectangle {
                                 text: root.test-log;
                                 wrap: word-wrap;
                                 font-size: 11px;
-                                color: #333;
+                                color: Style.text-primary;
                             }
                         }
                     }

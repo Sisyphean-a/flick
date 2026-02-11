@@ -1,14 +1,16 @@
 import { Button } from "std-widgets.slint";
 import { TransferEntry, TransferItem } from "../components/transfer_item.slint";
+import { Style } from "../theme/style.slint";
 
 export component TransferPanel inherits Rectangle {
     in property <[TransferEntry]> tasks: [];
     in property <bool> has-tasks: false;
 
     callback clear-completed();
+    callback retry-transfer(int);
 
     border-width: 1px;
-    border-color: #e0e0e0;
+    border-color: Style.border-color;
     border-radius: 4px;
     height: root.has-tasks ? 160px : 40px;
 
@@ -18,7 +20,7 @@ export component TransferPanel inherits Rectangle {
         // 标题栏
         Rectangle {
             height: 32px;
-            background: #f0f0f0;
+            background: Style.bg-header;
             HorizontalLayout {
                 padding-left: 10px;
                 padding-right: 4px;
@@ -48,6 +50,9 @@ export component TransferPanel inherits Rectangle {
                     alignment: start;
                     for task in root.tasks: TransferItem {
                         entry: task;
+                        retry(id) => {
+                            root.retry-transfer(id);
+                        }
                     }
                 }
             }

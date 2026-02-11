@@ -18,6 +18,10 @@ pub(crate) struct RemoteState {
     pub selected_indices: HashSet<usize>,
     /// 缓存当前目录的条目(用于双击导航)
     pub cached_entries: Vec<remote_fs::RemoteEntry>,
+    pub sort_field: String,
+    pub sort_ascending: bool,
+    pub filter_text: String,
+    pub last_clicked_index: Option<usize>,
 }
 
 fn remote_entries_to_ui(
@@ -30,11 +34,26 @@ fn remote_entries_to_ui(
         .map(|(i, e)| FileEntry {
             name: SharedString::from(&e.name),
             is_dir: e.is_dir,
-            size: SharedString::from(format_size(e.size)),
+            size: SharedString::from(format_size(e.size, e.is_dir)),
             modified: SharedString::from(&e.modified),
             selected: selected.contains(&i),
         })
         .collect()
+}
+
+fn sort_remote_entries(entries: &mut Vec<remote_fs::RemoteEntry>, field: &str, ascending: bool) {
+    entries.sort_by(|a, b| {
+        let dir_ord = b.is_dir.cmp(&a.is_dir);
+        if dir_ord != std::cmp::Ordering::Equal {
+            return dir_ord;
+        }
+        let ord = match field {
+            "size" => a.size.cmp(&b.size),
+            "modified" => a.modified.cmp(&b.modified),
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        };
+        if ascending { ord } else { ord.reverse() }
+    });
 }
 
 pub(crate) fn refresh_remote_dir(
@@ -48,9 +67,19 @@ pub(crate) fn refresh_remote_dir(
         None => return,
     };
     let selected = s.selected_indices.clone();
+    let sort_field = s.sort_field.clone();
+    let sort_asc = s.sort_ascending;
+    let filter = s.filter_text.clone();
 
-    let entries =
+    let mut entries =
         remote_fs::list_dir_sftp(uploader, path).unwrap_or_default();
+    sort_remote_entries(&mut entries, &sort_field, sort_asc);
+
+    if !filter.is_empty() {
+        let lower = filter.to_lowercase();
+        entries.retain(|e| e.name.to_lowercase().contains(&lower));
+    }
+
     let ui_entries = remote_entries_to_ui(&entries, &selected);
     let path_owned = path.to_string();
     drop(s);
@@ -58,11 +87,15 @@ pub(crate) fn refresh_remote_dir(
     let mut s = state.lock().unwrap();
     s.current_path = path_owned.clone();
     s.cached_entries = entries;
+    let file_count = s.cached_entries.len() as i32;
+    let selected_count = s.selected_indices.len() as i32;
     drop(s);
 
     if let Some(ui) = ui_handle.upgrade() {
         ui.set_remote_path(SharedString::from(&path_owned));
         ui.set_remote_files(ModelRc::new(VecModel::from(ui_entries)));
+        ui.set_remote_file_count(file_count);
+        ui.set_remote_selected_count(selected_count);
     }
 }
 
@@ -81,7 +114,10 @@ pub(crate) fn bind(
     bind_remote_select_all(ui, remote_state.clone());
     bind_remote_mkdir(ui, remote_state.clone());
     bind_remote_delete_selected(ui, remote_state.clone());
-    bind_remote_rename(ui, remote_state);
+    bind_remote_rename(ui, remote_state.clone());
+    bind_remote_sort_changed(ui, remote_state.clone());
+    bind_remote_file_clicked_ex(ui, remote_state.clone());
+    bind_remote_filter_changed(ui, remote_state);
 }
 
 fn bind_remote_connect(
@@ -172,34 +208,20 @@ fn bind_remote_delete_selected(
 ) {
     let ui_handle = ui.as_weak();
     ui.on_remote_delete_selected(move || {
-        let s = state.lock().unwrap();
-        let uploader = match &s.uploader {
-            Some(u) => u,
-            None => return,
-        };
-        let current = s.current_path.clone();
-        let to_delete: Vec<_> = s.selected_indices
-            .iter()
-            .filter_map(|&i| s.cached_entries.get(i))
-            .map(|e| {
-                let full_path = if current.ends_with('/') {
-                    format!("{}{}", current, e.name)
-                } else {
-                    format!("{}/{}", current, e.name)
-                };
-                (full_path, e.is_dir)
-            })
-            .collect();
-        for (path, is_dir) in &to_delete {
-            if let Err(e) = remote_fs::remote_remove(uploader, path, *is_dir) {
-                eprintln!("删除失败 {}: {}", path, e);
+        if let Some(ui) = ui_handle.upgrade() {
+            let s = state.lock().unwrap();
+            let count = s.selected_indices.len();
+            drop(s);
+            if count == 0 {
+                return;
             }
+            ui.set_confirm_title(SharedString::from("确认删除"));
+            ui.set_confirm_message(SharedString::from(
+                format!("确定要删除远程的 {} 个项目吗？此操作不可撤销。", count),
+            ));
+            ui.set_confirm_action(SharedString::from("remote-delete"));
+            ui.set_show_confirm(true);
         }
-        drop(s);
-        let mut s = state.lock().unwrap();
-        s.selected_indices.clear();
-        drop(s);
-        refresh_remote_dir(&state, &ui_handle, &current);
     });
 }
 fn bind_remote_disconnect(
@@ -292,15 +314,17 @@ fn bind_remote_file_clicked(
             };
 
             if let Some(entry) = s.cached_entries.get(idx).cloned() {
+                let sel_count = s.selected_indices.len() as i32;
                 drop(s);
                 let file_entry = FileEntry {
                     name: SharedString::from(&entry.name),
                     is_dir: entry.is_dir,
-                    size: SharedString::from(format_size(entry.size)),
+                    size: SharedString::from(format_size(entry.size, entry.is_dir)),
                     modified: SharedString::from(&entry.modified),
                     selected: is_selected,
                 };
                 ui.get_remote_files().set_row_data(idx, file_entry);
+                ui.set_remote_selected_count(sel_count);
             }
         }
     });
@@ -433,6 +457,92 @@ fn bind_remote_rename(
             return;
         }
         drop(s);
+        refresh_remote_dir(&state, &ui_handle, &current);
+    });
+}
+
+fn bind_remote_sort_changed(
+    ui: &AppWindow,
+    state: Arc<Mutex<RemoteState>>,
+) {
+    let ui_handle = ui.as_weak();
+    ui.on_remote_sort_changed(move |field| {
+        let current = {
+            let mut s = state.lock().unwrap();
+            if s.sort_field == field.as_str() {
+                s.sort_ascending = !s.sort_ascending;
+            } else {
+                s.sort_field = field.to_string();
+                s.sort_ascending = true;
+            }
+            s.current_path.clone()
+        };
+        refresh_remote_dir(&state, &ui_handle, &current);
+    });
+}
+
+fn bind_remote_file_clicked_ex(
+    ui: &AppWindow,
+    state: Arc<Mutex<RemoteState>>,
+) {
+    let ui_handle = ui.as_weak();
+    ui.on_remote_file_clicked_ex(move |index, ctrl, shift| {
+        if let Some(ui) = ui_handle.upgrade() {
+            let mut s = state.lock().unwrap();
+            let idx = index as usize;
+            let total = s.cached_entries.len();
+            if idx >= total {
+                return;
+            }
+
+            if shift {
+                let anchor = s.last_clicked_index.unwrap_or(0);
+                let (start, end) = if anchor <= idx {
+                    (anchor, idx)
+                } else {
+                    (idx, anchor)
+                };
+                s.selected_indices.clear();
+                for i in start..=end {
+                    s.selected_indices.insert(i);
+                }
+            } else if ctrl {
+                if s.selected_indices.contains(&idx) {
+                    s.selected_indices.remove(&idx);
+                } else {
+                    s.selected_indices.insert(idx);
+                }
+                s.last_clicked_index = Some(idx);
+            } else {
+                s.selected_indices.clear();
+                s.selected_indices.insert(idx);
+                s.last_clicked_index = Some(idx);
+            }
+
+            let selected = s.selected_indices.clone();
+            let entries = s.cached_entries.clone();
+            let sel_count = selected.len() as i32;
+            drop(s);
+
+            let ui_entries = remote_entries_to_ui(&entries, &selected);
+            ui.set_remote_files(ModelRc::new(VecModel::from(ui_entries)));
+            ui.set_remote_selected_count(sel_count);
+        }
+    });
+}
+
+fn bind_remote_filter_changed(
+    ui: &AppWindow,
+    state: Arc<Mutex<RemoteState>>,
+) {
+    let ui_handle = ui.as_weak();
+    ui.on_remote_filter_changed(move |text| {
+        let current = {
+            let mut s = state.lock().unwrap();
+            s.filter_text = text.to_string();
+            s.selected_indices.clear();
+            s.current_path.clone()
+        };
         refresh_remote_dir(&state, &ui_handle, &current);
     });
 }

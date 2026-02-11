@@ -1,6 +1,8 @@
-import { Button } from "std-widgets.slint";
-import { FileEntry, FileItem } from "../components/file_item.slint";
+import { Button, LineEdit } from "std-widgets.slint";
+import { FileEntry, FileItem, FileListHeader } from "../components/file_item.slint";
 import { PathBreadcrumb } from "../components/path_breadcrumb.slint";
+import { BookmarkEntry } from "../types.slint";
+import { Style } from "../theme/style.slint";
 
 export component LocalPanel inherits Rectangle {
     in property <string> current-path: "/";
@@ -8,19 +10,33 @@ export component LocalPanel inherits Rectangle {
     callback navigate(string);
     callback go-up();
     callback file-clicked(int);
+    callback file-clicked-ex(int, bool, bool);  // index, ctrl, shift
     callback file-double-clicked(int);
     callback refresh();
     callback select-all();
+    callback mkdir(string);
+    callback delete-selected();
+    callback rename-item(int, string);
+    in-out property <string> sort-field: "name";
+    in-out property <bool> sort-ascending: true;
+    callback sort-changed(string);
+    in-out property <bool> show-search: false;
+    in-out property <string> search-text: "";
+    callback filter-changed(string);
+    in property <[BookmarkEntry]> bookmarks: [];
+    in-out property <bool> show-bookmarks: false;
+    callback add-bookmark();
+    callback goto-bookmark(int);
+    callback remove-bookmark(int);
     border-width: 1px;
-    border-color: #e0e0e0;
-    border-radius: 4px;
+    border-color: Style.border-color;
     VerticalLayout {
         spacing: 0px;
 
         // 标题栏
         Rectangle {
             height: 32px;
-            background: #f0f0f0;
+            background: Style.bg-header;
             HorizontalLayout {
                 padding-left: 10px;
                 padding-right: 4px;
@@ -29,6 +45,22 @@ export component LocalPanel inherits Rectangle {
                     font-weight: 600;
                     vertical-alignment: center;
                     horizontal-stretch: 1;
+                }
+
+                Button {
+                    text: "新建";
+                    width: 40px;
+                    clicked => {
+                        root.mkdir("新建目录");
+                    }
+                }
+
+                Button {
+                    text: "删除";
+                    width: 40px;
+                    clicked => {
+                        root.delete-selected();
+                    }
                 }
 
                 Button {
@@ -46,6 +78,22 @@ export component LocalPanel inherits Rectangle {
                         root.refresh();
                     }
                 }
+
+                Button {
+                    text: "收藏";
+                    width: 40px;
+                    clicked => {
+                        root.add-bookmark();
+                    }
+                }
+
+                Button {
+                    text: "书签";
+                    width: 40px;
+                    clicked => {
+                        root.show-bookmarks = !root.show-bookmarks;
+                    }
+                }
             }
         }
 
@@ -57,6 +105,103 @@ export component LocalPanel inherits Rectangle {
             }
             go-up() => {
                 root.go-up();
+            }
+        }
+
+        // 书签列表
+        if root.show-bookmarks: Rectangle {
+            height: root.bookmarks.length > 0 ? Math.min(root.bookmarks.length * 28, 140) * 1px + 4px : 28px;
+            background: Style.bg-bookmark;
+            border-width: 1px;
+            border-color: Style.border-color;
+            VerticalLayout {
+                padding: 2px;
+                if root.bookmarks.length == 0: Text {
+                    text: "暂无书签";
+                    font-size: 12px;
+                    color: Style.text-placeholder;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                for bm[i] in root.bookmarks: Rectangle {
+                    height: 28px;
+                    background: bm-touch.has-hover ? Style.bg-bookmark-hover : transparent;
+                    bm-touch := TouchArea {
+                        clicked => {
+                            root.goto-bookmark(i);
+                            root.show-bookmarks = false;
+                        }
+                    }
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 4px;
+                        spacing: 4px;
+                        Text {
+                            text: bm.name;
+                            vertical-alignment: center;
+                            font-size: 12px;
+                            horizontal-stretch: 1;
+                            overflow: elide;
+                        }
+                        Button {
+                            text: "×";
+                            width: 24px;
+                            clicked => {
+                                root.remove-bookmark(i);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 列头排序
+        FileListHeader {
+            sort-field: root.sort-field;
+            sort-ascending: root.sort-ascending;
+            sort-changed(field) => {
+                if (root.sort-field == field) {
+                    root.sort-ascending = !root.sort-ascending;
+                } else {
+                    root.sort-field = field;
+                    root.sort-ascending = true;
+                }
+                root.sort-changed(root.sort-field);
+            }
+        }
+
+        // 搜索栏
+        if root.show-search: Rectangle {
+            height: 30px;
+            background: Style.bg-search;
+            HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 4px;
+                spacing: 4px;
+                Text {
+                    text: "搜索:";
+                    vertical-alignment: center;
+                    font-size: 12px;
+                    width: 40px;
+                }
+                LineEdit {
+                    horizontal-stretch: 1;
+                    text: root.search-text;
+                    font-size: 12px;
+                    edited(text) => {
+                        root.search-text = text;
+                        root.filter-changed(text);
+                    }
+                }
+                Button {
+                    text: "×";
+                    width: 28px;
+                    clicked => {
+                        root.search-text = "";
+                        root.show-search = false;
+                        root.filter-changed("");
+                    }
+                }
             }
         }
 
@@ -75,6 +220,9 @@ export component LocalPanel inherits Rectangle {
                         entry: file;
                         clicked => {
                             root.file-clicked(i);
+                        }
+                        clicked-with-modifiers(ctrl, shift) => {
+                            root.file-clicked-ex(i, ctrl, shift);
                         }
                         double-clicked => {
                             root.file-double-clicked(i);
