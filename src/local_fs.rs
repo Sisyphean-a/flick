@@ -72,6 +72,13 @@ fn list_drives() -> Vec<LocalEntry> {
 
     for disk in disks.list() {
         let mount_point = disk.mount_point();
+
+        // 过滤掉非根目录的挂载点（主要针对 Windows 上的 Docker 容器卷等）
+        // 如果有父目录，说明它不是一个根驱动器（如 C:\）
+        if mount_point.parent().is_some() {
+            continue;
+        }
+
         entries.push(LocalEntry {
             name: mount_point.to_string_lossy().to_string(),
             is_dir: true,
