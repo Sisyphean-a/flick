@@ -22,7 +22,7 @@ export { ServerConfigUI, FileEntry, TransferEntry, BookmarkEntry }
 
 export component AppWindow inherits Window {
     title: "Flick 文件传输";
-    min-width: 700px;
+    min-width: 950px;
     min-height: 500px;
     default-font-family: "Microsoft YaHei";
     in-out property <bool> show-settings: false;
@@ -171,306 +171,330 @@ export component AppWindow inherits Window {
                 return accept;
             }
             if (event.text == Key.F5) {
-                if (root.focus-on-remote) { root.remote-refresh(); }
-                else { root.local-refresh(); }
+                if (root.focus-on-remote) {
+                    root.remote-refresh();
+                } else {
+                    root.local-refresh();
+                }
                 return accept;
             }
             if (event.text == Key.Delete) {
-                if (root.focus-on-remote) { root.remote-delete-selected(); }
-                else { root.local-delete-selected(); }
+                if (root.focus-on-remote) {
+                    root.remote-delete-selected();
+                } else {
+                    root.local-delete-selected();
+                }
                 return accept;
             }
             if (event.text == Key.Backspace) {
-                if (root.focus-on-remote) { root.remote-go-up(); }
-                else { root.local-go-up(); }
+                if (root.focus-on-remote) {
+                    root.remote-go-up();
+                } else {
+                    root.local-go-up();
+                }
                 return accept;
             }
             if (event.modifiers.control && event.text == "a") {
-                if (root.focus-on-remote) { root.remote-select-all(); }
-                else { root.local-select-all(); }
+                if (root.focus-on-remote) {
+                    root.remote-select-all();
+                } else {
+                    root.local-select-all();
+                }
                 return accept;
             }
             if (event.modifiers.control && event.text == "f") {
-                if (root.focus-on-remote) { root.remote-show-search = !root.remote-show-search; }
-                else { root.local-show-search = !root.local-show-search; }
+                if (root.focus-on-remote) {
+                    root.remote-show-search = !root.remote-show-search;
+                } else {
+                    root.local-show-search = !root.local-show-search;
+                }
                 return accept;
             }
             return reject;
         }
-    VerticalBox {
-        padding: 20px;
-        spacing: 15px;
-        HorizontalBox {
-            alignment: space-between;
-            Text {
-                text: "Flick";
-                font-size: 24px;
-                font-weight: 700;
-            }
+        VerticalBox {
+            padding: 20px;
+            spacing: 15px;
+            HorizontalBox {
+                alignment: space-between;
+                Text {
+                    text: "Flick";
+                    font-size: 24px;
+                    font-weight: 700;
+                }
 
-            Button {
-                text: "设置";
-                width: 60px;
-                clicked => {
-                    root.show-settings = true;
-                    root.current-settings-index = -1;
-                    root.current-config = {
-                        name: "New Server",
-                        host: "",
-                        port: "22",
-                        user: "root",
-                        auth_type: "password",
-                        password: "",
-                        key_path: "",
-                        default_target_dir: "/tmp"
-                    };
+                Button {
+                    text: "设置";
+                    width: 60px;
+                    clicked => {
+                        root.show-settings = true;
+                        root.current-settings-index = -1;
+                        root.current-config = {
+                            name: "New Server",
+                            host: "",
+                            port: "22",
+                            user: "root",
+                            auth_type: "password",
+                            password: "",
+                            key_path: "",
+                            default_target_dir: "/tmp"
+                        };
+                    }
                 }
             }
-        }
 
         // 双面板文件浏览器
         panels-area := Rectangle {
-            vertical-stretch: 1;
-            LocalPanel {
-                x: 0px;
-                y: 0px;
-                width: panels-area.width * root.split-ratio - 3px;
-                height: panels-area.height;
-                current-path: root.local-path;
-                files: root.local-files;
-                navigate(p) => {
-                    root.local-navigate(p);
+                vertical-stretch: 1;
+                LocalPanel {
+                    x: 0px;
+                    y: 0px;
+                    width: panels-area.width * root.split-ratio - 3px;
+                    height: panels-area.height;
+                    current-path: root.local-path;
+                    files: root.local-files;
+                    navigate(p) => {
+                        root.local-navigate(p);
+                    }
+                    go-up() => {
+                        root.local-go-up();
+                    }
+                    file-clicked(i) => {
+                        root.local-file-clicked(i);
+                    }
+                    file-clicked-ex(i, ctrl, shift) => {
+                        root.local-file-clicked-ex(i, ctrl, shift);
+                    }
+                    file-double-clicked(i) => {
+                        root.local-file-double-clicked(i);
+                    }
+                    refresh() => {
+                        root.local-refresh();
+                    }
+                    select-all() => {
+                        root.local-select-all();
+                    }
+                    mkdir(name) => {
+                        root.local-mkdir(name);
+                    }
+                    delete-selected() => {
+                        root.local-delete-selected();
+                    }
+                    rename-item(i, name) => {
+                        root.local-rename(i, name);
+                    }
+                    sort-field: root.local-sort-field;
+                    sort-ascending: root.local-sort-ascending;
+                    sort-changed(field) => {
+                        root.local-sort-changed(field);
+                    }
+                    show-search: root.local-show-search;
+                    filter-changed(text) => {
+                        root.local-filter-changed(text);
+                    }
+                    bookmarks: root.bookmarks;
+                    add-bookmark() => {
+                        root.add-bookmark(root.local-path, root.local-path, "local");
+                    }
+                    goto-bookmark(i) => {
+                        root.goto-bookmark(i);
+                    }
+                    remove-bookmark(i) => {
+                        root.remove-bookmark(i);
+                    }
                 }
-                go-up() => {
-                    root.local-go-up();
-                }
-                file-clicked(i) => {
-                    root.local-file-clicked(i);
-                }
-                file-clicked-ex(i, ctrl, shift) => {
-                    root.local-file-clicked-ex(i, ctrl, shift);
-                }
-                file-double-clicked(i) => {
-                    root.local-file-double-clicked(i);
-                }
-                refresh() => {
-                    root.local-refresh();
-                }
-                select-all() => {
-                    root.local-select-all();
-                }
-                mkdir(name) => {
-                    root.local-mkdir(name);
-                }
-                delete-selected() => {
-                    root.local-delete-selected();
-                }
-                rename-item(i, name) => {
-                    root.local-rename(i, name);
-                }
-                sort-field: root.local-sort-field;
-                sort-ascending: root.local-sort-ascending;
-                sort-changed(field) => {
-                    root.local-sort-changed(field);
-                }
-                show-search: root.local-show-search;
-                filter-changed(text) => {
-                    root.local-filter-changed(text);
-                }
-                bookmarks: root.bookmarks;
-                add-bookmark() => {
-                    root.add-bookmark(root.local-path, root.local-path, "local");
-                }
-                goto-bookmark(i) => {
-                    root.goto-bookmark(i);
-                }
-                remove-bookmark(i) => {
-                    root.remove-bookmark(i);
-                }
-            }
 
             // 分隔条
             Rectangle {
-                x: panels-area.width * root.split-ratio - 3px;
-                y: 0px;
-                width: 6px;
-                height: panels-area.height;
-                background: splitter-touch.has-hover || splitter-touch.pressed ? Style.splitter-active : Style.splitter-default;
-                splitter-touch := TouchArea {
-                    mouse-cursor: col-resize;
-                    moved => {
-                        root.split-ratio = Math.max(0.2, Math.min(0.8,
-                            (self.mouse-x + panels-area.width * root.split-ratio - 3px) / panels-area.width
-                        ));
-                    }
-                }
-            }
-
-            RemotePanel {
-                x: panels-area.width * root.split-ratio + 3px;
-                y: 0px;
-                width: panels-area.width * (1.0 - root.split-ratio) - 3px;
-                height: panels-area.height;
-                current-path: root.remote-path;
-                files: root.remote-files;
-                servers: root.servers;
-                connected: root.remote-connected;
-                connecting: root.remote-connecting;
-                status-text: root.remote-status;
-                current-server-index <=> root.remote-server-index;
-                connect(idx) => {
-                    root.remote-connect(idx);
-                }
-                disconnect() => {
-                    root.remote-disconnect();
-                }
-                navigate(p) => {
-                    root.remote-navigate(p);
-                }
-                go-up() => {
-                    root.remote-go-up();
-                }
-                file-clicked(i) => {
-                    root.remote-file-clicked(i);
-                }
-                file-clicked-ex(i, ctrl, shift) => {
-                    root.remote-file-clicked-ex(i, ctrl, shift);
-                }
-                file-double-clicked(i) => {
-                    root.remote-file-double-clicked(i);
-                }
-                refresh() => {
-                    root.remote-refresh();
-                }
-                select-all() => {
-                    root.remote-select-all();
-                }
-                mkdir(name) => {
-                    root.remote-mkdir(name);
-                }
-                delete-selected() => {
-                    root.remote-delete-selected();
-                }
-                rename-item(i, name) => {
-                    root.remote-rename(i, name);
-                }
-                sort-field: root.remote-sort-field;
-                sort-ascending: root.remote-sort-ascending;
-                sort-changed(field) => {
-                    root.remote-sort-changed(field);
-                }
-                show-search: root.remote-show-search;
-                filter-changed(text) => {
-                    root.remote-filter-changed(text);
-                }
-                bookmarks: root.bookmarks;
-                add-bookmark() => {
-                    root.add-bookmark(root.remote-path, root.remote-path, "remote");
-                }
-                goto-bookmark(i) => {
-                    root.goto-bookmark(i);
-                }
-                remove-bookmark(i) => {
-                    root.remove-bookmark(i);
-                }
-            }
-        }
-
-        // 传输操作按钮
-        HorizontalBox {
-            alignment: center;
-            spacing: 20px;
-            padding-top: 10px;
-            padding-bottom: 10px;
-            Button {
-                text: "上传选中文件";
-                enabled: root.remote-connected;
-                width: 150px;
-                clicked => {
-                    root.upload-selected();
-                }
-            }
-
-            Button {
-                text: "下载选中文件";
-                enabled: root.remote-connected;
-                width: 150px;
-                clicked => {
-                    root.download-selected();
-                }
-            }
-        }
-
-        // 传输队列面板
-        TransferPanel {
-            tasks: root.transfer-tasks;
-            has-tasks: root.has-transfer-tasks;
-            clear-completed => {
-                root.clear-completed-transfers();
-            }
-            retry-transfer(id) => {
-                root.retry-transfer(id);
-            }
-        }
-
-        // 状态栏
-        Rectangle {
-            height: 28px;
-            background: Style.bg-status;
-            border-radius: 4px;
-            border-width: 1px;
-            border-color: Style.border-color;
-            HorizontalLayout {
-                padding-left: 12px;
-                padding-right: 12px;
-                spacing: 8px;
-                Text {
-                    text: "本地: " + root.local-file-count + " 项";
-                    vertical-alignment: center;
-                    font-size: 12px;
-                    color: Style.text-secondary;
-                }
-                if root.local-selected-count > 0: Text {
-                    text: "(" + root.local-selected-count + " 选中)";
-                    vertical-alignment: center;
-                    font-size: 12px;
-                    color: Style.link;
-                }
-                Rectangle { horizontal-stretch: 1; }
-                Rectangle {
-                    width: 12px;
-                    VerticalLayout {
-                        alignment: center;
-                        Rectangle {
-                            width: 8px;
-                            height: 8px;
-                            border-radius: 4px;
-                            background: root.remote-connected ? Style.connected : Style.disconnected;
+                    x: panels-area.width * root.split-ratio - 3px;
+                    y: 0px;
+                    width: 6px;
+                    height: panels-area.height;
+                    background: splitter-touch.has-hover || splitter-touch.pressed ? Style.splitter-active : Style.splitter-default;
+                    splitter-touch := TouchArea {
+                        mouse-cursor: col-resize;
+                        moved => {
+                            root.split-ratio = Math.max(0.2, Math.min(0.8,
+                            (self.mouse-x + panels-area.width * root.split-ratio - 3px) / panels-area.width));
                         }
                     }
                 }
-                Text {
-                    text: root.remote-connected ? "已连接" : "未连接";
-                    vertical-alignment: center;
-                    font-size: 12px;
-                    color: root.remote-connected ? Style.connected : Style.text-placeholder;
-                }
-                Rectangle { horizontal-stretch: 1; }
-                Text {
-                    text: "远程: " + root.remote-file-count + " 项";
-                    vertical-alignment: center;
-                    font-size: 12px;
-                    color: Style.text-secondary;
-                }
-                if root.remote-selected-count > 0: Text {
-                    text: "(" + root.remote-selected-count + " 选中)";
-                    vertical-alignment: center;
-                    font-size: 12px;
-                    color: Style.link;
+
+                RemotePanel {
+                    x: panels-area.width * root.split-ratio + 3px;
+                    y: 0px;
+                    width: panels-area.width * (1.0 - root.split-ratio) - 3px;
+                    height: panels-area.height;
+                    current-path: root.remote-path;
+                    files: root.remote-files;
+                    servers: root.servers;
+                    connected: root.remote-connected;
+                    connecting: root.remote-connecting;
+                    status-text: root.remote-status;
+                    current-server-index <=> root.remote-server-index;
+                    connect(idx) => {
+                        root.remote-connect(idx);
+                    }
+                    disconnect() => {
+                        root.remote-disconnect();
+                    }
+                    navigate(p) => {
+                        root.remote-navigate(p);
+                    }
+                    go-up() => {
+                        root.remote-go-up();
+                    }
+                    file-clicked(i) => {
+                        root.remote-file-clicked(i);
+                    }
+                    file-clicked-ex(i, ctrl, shift) => {
+                        root.remote-file-clicked-ex(i, ctrl, shift);
+                    }
+                    file-double-clicked(i) => {
+                        root.remote-file-double-clicked(i);
+                    }
+                    refresh() => {
+                        root.remote-refresh();
+                    }
+                    select-all() => {
+                        root.remote-select-all();
+                    }
+                    mkdir(name) => {
+                        root.remote-mkdir(name);
+                    }
+                    delete-selected() => {
+                        root.remote-delete-selected();
+                    }
+                    rename-item(i, name) => {
+                        root.remote-rename(i, name);
+                    }
+                    sort-field: root.remote-sort-field;
+                    sort-ascending: root.remote-sort-ascending;
+                    sort-changed(field) => {
+                        root.remote-sort-changed(field);
+                    }
+                    show-search: root.remote-show-search;
+                    filter-changed(text) => {
+                        root.remote-filter-changed(text);
+                    }
+                    bookmarks: root.bookmarks;
+                    add-bookmark() => {
+                        root.add-bookmark(root.remote-path, root.remote-path, "remote");
+                    }
+                    goto-bookmark(i) => {
+                        root.goto-bookmark(i);
+                    }
+                    remove-bookmark(i) => {
+                        root.remove-bookmark(i);
+                    }
                 }
             }
-        }
-    } // VerticalBox
+
+        // 传输操作按钮
+        HorizontalBox {
+                alignment: center;
+                spacing: 20px;
+                padding-top: 10px;
+                padding-bottom: 10px;
+                Button {
+                    text: "上传选中文件";
+                    enabled: root.remote-connected;
+                    width: 150px;
+                    clicked => {
+                        root.upload-selected();
+                    }
+                }
+
+                Button {
+                    text: "下载选中文件";
+                    enabled: root.remote-connected;
+                    width: 150px;
+                    clicked => {
+                        root.download-selected();
+                    }
+                }
+            }
+
+        // 传输队列面板
+        TransferPanel {
+                tasks: root.transfer-tasks;
+                has-tasks: root.has-transfer-tasks;
+                clear-completed => {
+                    root.clear-completed-transfers();
+                }
+                retry-transfer(id) => {
+                    root.retry-transfer(id);
+                }
+            }
+
+        // 状态栏
+        Rectangle {
+                height: 28px;
+                background: Style.bg-status;
+                border-radius: 4px;
+                border-width: 1px;
+                border-color: Style.border-color;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    spacing: 8px;
+                    Text {
+                        text: "本地: " + root.local-file-count + " 项";
+                        vertical-alignment: center;
+                        font-size: 12px;
+                        color: Style.text-secondary;
+                    }
+
+                    if root.local-selected-count > 0: Text {
+                        text: "(" + root.local-selected-count + " 选中)";
+                        vertical-alignment: center;
+                        font-size: 12px;
+                        color: Style.link;
+                    }
+                    Rectangle {
+                        horizontal-stretch: 1;
+                    }
+
+                    Rectangle {
+                        width: 12px;
+                        VerticalLayout {
+                            alignment: center;
+                            Rectangle {
+                                width: 8px;
+                                height: 8px;
+                                border-radius: 4px;
+                                background: root.remote-connected ? Style.connected : Style.disconnected;
+                            }
+                        }
+                    }
+
+                    Text {
+                        text: root.remote-connected ? "已连接" : "未连接";
+                        vertical-alignment: center;
+                        font-size: 12px;
+                        color: root.remote-connected ? Style.connected : Style.text-placeholder;
+                    }
+
+                    Rectangle {
+                        horizontal-stretch: 1;
+                    }
+
+                    Text {
+                        text: "远程: " + root.remote-file-count + " 项";
+                        vertical-alignment: center;
+                        font-size: 12px;
+                        color: Style.text-secondary;
+                    }
+
+                    if root.remote-selected-count > 0: Text {
+                        text: "(" + root.remote-selected-count + " 选中)";
+                        vertical-alignment: center;
+                        font-size: 12px;
+                        color: Style.link;
+                    }
+                }
+            }
+        } // VerticalBox
     } // FocusScope
 
     // 设置覆盖层

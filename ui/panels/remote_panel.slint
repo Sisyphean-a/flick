@@ -1,5 +1,9 @@
 import { Button, LineEdit } from "std-widgets.slint";
-import { FileEntry, FileItem, FileListHeader } from "../components/file_item.slint";
+import {
+    FileEntry,
+    FileItem,
+    FileListHeader,
+} from "../components/file_item.slint";
 import { PathBreadcrumb } from "../components/path_breadcrumb.slint";
 import { ServerSelector } from "../components/server_selector.slint";
 import { BookmarkEntry } from "../types.slint";
@@ -57,7 +61,7 @@ export component RemotePanel inherits Rectangle {
 
                 Button {
                     text: "新建";
-                    width: 40px;
+                    width: 56px;
                     enabled: root.connected;
                     clicked => {
                         root.mkdir("新建目录");
@@ -66,7 +70,7 @@ export component RemotePanel inherits Rectangle {
 
                 Button {
                     text: "删除";
-                    width: 40px;
+                    width: 56px;
                     enabled: root.connected;
                     clicked => {
                         root.delete-selected();
@@ -75,7 +79,7 @@ export component RemotePanel inherits Rectangle {
 
                 Button {
                     text: "全选";
-                    width: 40px;
+                    width: 56px;
                     enabled: root.connected;
                     clicked => {
                         root.select-all();
@@ -84,7 +88,7 @@ export component RemotePanel inherits Rectangle {
 
                 Button {
                     text: "刷新";
-                    width: 40px;
+                    width: 56px;
                     enabled: root.connected;
                     clicked => {
                         root.refresh();
@@ -93,7 +97,7 @@ export component RemotePanel inherits Rectangle {
 
                 Button {
                     text: "收藏";
-                    width: 40px;
+                    width: 56px;
                     enabled: root.connected;
                     clicked => {
                         root.add-bookmark();
@@ -102,7 +106,7 @@ export component RemotePanel inherits Rectangle {
 
                 Button {
                     text: "书签";
-                    width: 40px;
+                    width: 56px;
                     clicked => {
                         root.show-bookmarks = !root.show-bookmarks;
                     }
@@ -159,6 +163,7 @@ export component RemotePanel inherits Rectangle {
                             root.show-bookmarks = false;
                         }
                     }
+
                     HorizontalLayout {
                         padding-left: 8px;
                         padding-right: 4px;
@@ -170,6 +175,7 @@ export component RemotePanel inherits Rectangle {
                             horizontal-stretch: 1;
                             overflow: elide;
                         }
+
                         Button {
                             text: "×";
                             width: 24px;
@@ -211,6 +217,7 @@ export component RemotePanel inherits Rectangle {
                     font-size: 12px;
                     width: 40px;
                 }
+
                 LineEdit {
                     horizontal-stretch: 1;
                     text: root.search-text;
@@ -220,6 +227,7 @@ export component RemotePanel inherits Rectangle {
                         root.filter-changed(text);
                     }
                 }
+
                 Button {
                     text: "×";
                     width: 28px;

@@ -16,17 +16,19 @@ export component FileListHeader inherits Rectangle {
     background: Style.bg-header;
     border-width: 0px;
     border-color: Style.border-color;
-
     HorizontalLayout {
         padding-left: 8px;
         padding-right: 8px;
         spacing: 8px;
-
-        Rectangle { width: 20px; }
+        Rectangle {
+            width: 20px;
+        }
 
         name-touch := TouchArea {
             horizontal-stretch: 1;
-            clicked => { root.sort-changed("name"); }
+            clicked => {
+                root.sort-changed("name");
+            }
             Text {
                 text: root.sort-field == "name" ? (root.sort-ascending ? "文件名 ▲" : "文件名 ▼") : "文件名";
                 vertical-alignment: center;
@@ -38,7 +40,9 @@ export component FileListHeader inherits Rectangle {
 
         size-touch := TouchArea {
             width: 60px;
-            clicked => { root.sort-changed("size"); }
+            clicked => {
+                root.sort-changed("size");
+            }
             Text {
                 text: root.sort-field == "size" ? (root.sort-ascending ? "大小 ▲" : "大小 ▼") : "大小";
                 vertical-alignment: center;
@@ -51,7 +55,9 @@ export component FileListHeader inherits Rectangle {
 
         modified-touch := TouchArea {
             width: 110px;
-            clicked => { root.sort-changed("modified"); }
+            clicked => {
+                root.sort-changed("modified");
+            }
             Text {
                 text: root.sort-field == "modified" ? (root.sort-ascending ? "修改时间 ▲" : "修改时间 ▼") : "修改时间";
                 vertical-alignment: center;
@@ -82,7 +88,9 @@ export component FileItem inherits Rectangle {
         }
         pointer-event(event) => {
             if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) {
-                root.clicked-with-modifiers(event.modifiers.control, event.modifiers.shift);
+                if (event.modifiers.control || event.modifiers.shift) {
+                    root.clicked-with-modifiers(event.modifiers.control, event.modifiers.shift);
+                }
             }
         }
     }

@@ -295,6 +295,8 @@ fn bind_remote_go_up(
     });
 }
 
+
+
 fn bind_remote_file_clicked(
     ui: &AppWindow,
     state: Arc<Mutex<RemoteState>>,
@@ -492,6 +494,12 @@ fn bind_remote_file_clicked_ex(
             let idx = index as usize;
             let total = s.cached_entries.len();
             if idx >= total {
+                return;
+            }
+
+            // 如果没有按 Ctrl 或 Shift，这里直接忽略
+            // 因为普通点击已经由 bind_remote_file_clicked 处理
+            if !ctrl && !shift {
                 return;
             }
 

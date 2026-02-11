@@ -18,7 +18,7 @@ export component PathBreadcrumb inherits Rectangle {
         spacing: 4px;
         Button {
             text: "上级";
-            width: 40px;
+            width: 56px;
             clicked => {
                 root.go-up();
             }
@@ -37,7 +37,6 @@ export component PathBreadcrumb inherits Rectangle {
                 font-size: 13px;
             }
         }
-
         if root.editing: edit-input := LineEdit {
             horizontal-stretch: 1;
             text: root.edit-text;
@@ -49,10 +48,9 @@ export component PathBreadcrumb inherits Rectangle {
                 }
             }
         }
-
         if root.editing: Button {
             text: "取消";
-            width: 40px;
+            width: 56px;
             clicked => {
                 root.editing = false;
             }

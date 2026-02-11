@@ -147,6 +147,8 @@ fn bind_local_go_up(ui: &AppWindow, state: Arc<Mutex<LocalState>>) {
     });
 }
 
+
+
 fn bind_local_file_clicked(ui: &AppWindow, state: Arc<Mutex<LocalState>>) {
     let ui_handle = ui.as_weak();
     ui.on_local_file_clicked(move |index| {
@@ -315,6 +317,18 @@ fn bind_local_file_clicked_ex(ui: &AppWindow, state: Arc<Mutex<LocalState>>) {
             let idx = index as usize;
             let total = s.cached_entries.len();
             if idx >= total {
+                return;
+            }
+
+            // 如果没有按 Ctrl 或 Shift，这里直接忽略
+            // 因为普通点击已经由 bind_local_file_clicked 处理
+            if !ctrl && !shift {
+                return;
+            }
+
+            // 如果没有按 Ctrl 或 Shift，这里直接忽略
+            // 因为普通点击已经由 bind_local_file_clicked 处理
+            if !ctrl && !shift {
                 return;
             }
 
