@@ -12,7 +12,7 @@ Flick 是一个 Rust 桌面应用，提供双面板文件管理器界面，通�
 # 构建（debug）
 cargo build
 
-# 构建（release，启用 LTO + strip）
+# 构建（release，启用 LTO + strip + 二进制大小优化）
 cargo build --release
 
 # 运行
@@ -24,6 +24,12 @@ cargo run -- <FILE_PATH>
 # 检查编译错误
 cargo check
 
+# 运行测试
+cargo test
+
+# 运行特定测试
+cargo test <TEST_NAME>
+
 # 格式化
 cargo fmt
 
@@ -32,6 +38,15 @@ cargo clippy
 ```
 
 ## Architecture
+
+### 关键依赖
+
+- **slint 1.9**：轻量级 Rust 原生 UI 框架，支持声明式 UI 和热重载
+- **ssh2 0.9**：libssh2 绑定，用于 SSH/SFTP 连接
+- **clap 4.4**：命令行参数解析，支持文件路径参数
+- **serde + toml**：配置文件序列化/反序列化
+- **rfd**：原生文件选择对话框
+- **chrono**：时间格式化
 
 ### 模块结构
 
@@ -49,7 +64,7 @@ src/
     ├── settings.rs  # 服务器配置 CRUD、连接测试
     ├── explorer.rs  # 双面板文件浏览、上传/下载操作
     ├── convert.rs   # UI 类型 ↔ Rust 类型转换
-    └── quick_upload.rs  # Phase 5 待恢复
+    └── quick_upload.rs  # 快速上传模式实现
 ```
 
 ### UI 层 (Slint)
@@ -74,9 +89,11 @@ ui/
 - **Windows 适配**：子进程创建使用 `CREATE_NO_WINDOW` 标志
 - **配置存储**：TOML 格式，路径由 `dirs` crate 决定（Windows: `%APPDATA%/flick/`，Unix: `~/.config/flick/`）
 
-### 开发阶段
+### 工作模式
 
-当前处于 Phase 4（双面板文件管理器）。`quick_upload` 模块已禁用，计划在 Phase 5 恢复。
+应用支持两种模式：
+1. **快速上传模式**：通过命令行参数 `cargo run -- <FILE_PATH>` 启动，用于右键菜单集成
+2. **双面板管理器模式**：默认模式，提供完整的本地/远程文件浏览和传输功能
 
 ## Language
 
