@@ -137,7 +137,8 @@ export component SettingsPage inherits Rectangle {
                         }
 
                         LineEdit {
-                            text <=> root.current-config.name;
+                            text: root.current-config.name;
+                            edited(val) => { root.current-config.name = val; }
                             placeholder-text: "例如: 阿里云 Shanghai";
                             height: 30px;
                         }
@@ -152,7 +153,8 @@ export component SettingsPage inherits Rectangle {
                         }
 
                         LineEdit {
-                            text <=> root.current-config.host;
+                            text: root.current-config.host;
+                            edited(val) => { root.current-config.host = val; }
                             placeholder-text: "IP or Domain";
                             height: 30px;
                             horizontal-stretch: 1;
@@ -169,7 +171,8 @@ export component SettingsPage inherits Rectangle {
                         }
 
                         LineEdit {
-                            text <=> root.current-config.port;
+                            text: root.current-config.port;
+                            edited(val) => { root.current-config.port = val; }
                             width: 60px;
                             height: 30px;
                         }
@@ -184,7 +187,8 @@ export component SettingsPage inherits Rectangle {
                         }
 
                         LineEdit {
-                            text <=> root.current-config.user;
+                            text: root.current-config.user;
+                            edited(val) => { root.current-config.user = val; }
                             height: 30px;
                         }
                     }
@@ -216,7 +220,8 @@ export component SettingsPage inherits Rectangle {
                         }
 
                         if root.current-config.auth_type == "password": LineEdit {
-                            text <=> root.current-config.password;
+                            text: root.current-config.password;
+                            edited(val) => { root.current-config.password = val; }
                             input-type: password;
                             placeholder-text: "SSH Password";
                             height: 30px;
@@ -226,7 +231,8 @@ export component SettingsPage inherits Rectangle {
                             horizontal-stretch: 1;
                             spacing: 5px;
                             LineEdit {
-                                text <=> root.current-config.key_path;
+                                text: root.current-config.key_path;
+                                edited(val) => { root.current-config.key_path = val; }
                                 placeholder-text: root.ssh-key-hint;
                                 height: 30px;
                                 horizontal-stretch: 1;
@@ -252,7 +258,8 @@ export component SettingsPage inherits Rectangle {
                         }
 
                         LineEdit {
-                            text <=> root.current-config.default_target_dir;
+                            text: root.current-config.default_target_dir;
+                            edited(val) => { root.current-config.default_target_dir = val; }
                             height: 30px;
                         }
                     }
@@ -264,7 +271,10 @@ export component SettingsPage inherits Rectangle {
                         } // placeholder
                          CheckBox {
                             text: "设为默认服务器 (启动时自动选中)";
-                            checked <=> root.current-config.is_default;
+                            checked: root.current-config.is_default;
+                            toggled => {
+                                root.current-config.is_default = self.checked;
+                            }
                         }
                     }
                 }

@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 # UI 框架：轻量、Rust 原生、支持实时预览
-slint = "1.9" 
+slint = { version = "1.9", features = ["backend-winit", "renderer-skia"] } 
 
 # SSH 核心库
 ssh2 = "0.9"
@@ -29,6 +29,7 @@ rfd = "0.12"
 
 # 文件时间格式化
 chrono = "0.4"
+sysinfo = "0.38.1"
 
 [build-dependencies]
 slint-build = "1.9"

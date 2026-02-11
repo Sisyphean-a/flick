@@ -17,7 +17,7 @@ pub(crate) struct LocalState {
 }
 
 pub(crate) fn default_start_dir() -> PathBuf {
-    dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"))
+    PathBuf::from("")
 }
 
 pub(crate) fn refresh_local(ui: &AppWindow, state: &Arc<Mutex<LocalState>>) {
@@ -47,9 +47,13 @@ pub(crate) fn refresh_local(ui: &AppWindow, state: &Arc<Mutex<LocalState>>) {
     s.cached_entries = entries;
     drop(s);
 
-    ui.set_local_path(SharedString::from(
-        path.to_string_lossy().as_ref(),
-    ));
+    let display_path = if path.as_os_str().is_empty() {
+        "我的电脑".to_string()
+    } else {
+        path.to_string_lossy().to_string()
+    };
+
+    ui.set_local_path(SharedString::from(display_path));
     ui.set_local_files(ModelRc::new(VecModel::from(file_entries)));
 }
 
@@ -67,7 +71,11 @@ pub(crate) fn bind(ui: &AppWindow, local_state: Arc<Mutex<LocalState>>) {
 fn bind_local_navigate(ui: &AppWindow, state: Arc<Mutex<LocalState>>) {
     let ui_handle = ui.as_weak();
     ui.on_local_navigate(move |path_str| {
-        let path = PathBuf::from(path_str.as_str());
+        let path = if path_str == "我的电脑" {
+            PathBuf::from("")
+        } else {
+            PathBuf::from(path_str.as_str())
+        };
         if let Some(ui) = ui_handle.upgrade() {
             let mut s = state.lock().unwrap();
             s.current_path = path.clone();
@@ -86,6 +94,12 @@ fn bind_local_go_up(ui: &AppWindow, state: Arc<Mutex<LocalState>>) {
             if let Some(parent) = s.current_path.parent() {
                 let parent = parent.to_path_buf();
                 s.current_path = parent.clone();
+                s.selected_indices.clear();
+                drop(s);
+                refresh_local(&ui, &state);
+            } else if !s.current_path.as_os_str().is_empty() {
+                // If no parent and not at root (My Computer), go to My Computer
+                s.current_path = PathBuf::from("");
                 s.selected_indices.clear();
                 drop(s);
                 refresh_local(&ui, &state);
