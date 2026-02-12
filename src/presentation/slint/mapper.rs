@@ -1,6 +1,6 @@
 use slint::SharedString;
 
-use crate::config::ServerConfig;
+use crate::domain::config::ServerConfig;
 use crate::ServerConfigUI;
 
 /// ServerConfig -> ServerConfigUI
@@ -58,3 +58,4 @@ pub fn default_ui_config() -> ServerConfigUI {
         is_default: false,
     }
 }
+

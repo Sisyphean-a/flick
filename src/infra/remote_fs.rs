@@ -1,5 +1,5 @@
-use crate::config::ServerConfig;
-use crate::ssh_core::{AuthMode, SshUploader};
+use crate::domain::config::ServerConfig;
+use crate::infra::ssh::{AuthMode, SshUploader};
 use anyhow::{anyhow, Result};
 use chrono::{Local, TimeZone};
 use std::path::Path;
@@ -283,3 +283,4 @@ mod tests {
         assert_eq!(entries[0].name, "my file name.txt");
     }
 }
+

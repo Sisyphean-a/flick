@@ -1,7 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::PathBuf;
-use anyhow::{Context, Result};
 
 /// 服务器连接配置
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -74,56 +71,6 @@ impl Default for AppConfig {
     }
 }
 
-impl AppConfig {
-    /// 加载配置文件
-    pub fn load() -> Result<Self> {
-        let config_path = get_config_path()?;
-        
-        if config_path.exists() {
-            let content = fs::read_to_string(&config_path)
-                .with_context(|| format!("无法读取配置文件: {:?}", config_path))?;
-            let config: AppConfig = toml::from_str(&content)
-                .with_context(|| "配置文件格式错误，请检查 server.toml")?;
-            Ok(config)
-        } else {
-            // 如果不存在，创建默认配置
-            let config = AppConfig::default();
-            config.save().with_context(|| "创建默认配置文件失败")?;
-            Ok(config)
-        }
-    }
-
-    /// 保存配置文件
-    pub fn save(&self) -> Result<()> {
-        let config_path = get_config_path()?;
-        
-        // 确保父目录存在
-        if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("无法创建配置目录: {:?}", parent))?;
-        }
-
-        let content = toml::to_string_pretty(self)
-            .with_context(|| "序列化配置失败")?;
-        
-        fs::write(&config_path, content)
-            .with_context(|| format!("无法写入配置文件: {:?}", config_path))?;
-        
-        Ok(())
-    }
-}
-
-/// 获取配置文件路径
-/// Windows: %APPDATA%/flick/server.toml
-/// Linux: ~/.config/flick/server.toml
-fn get_config_path() -> Result<PathBuf> {
-    let mut path = dirs::config_dir()
-        .ok_or_else(|| anyhow::anyhow!("无法获取系统配置目录"))?;
-    path.push("flick");
-    path.push("server.toml");
-    Ok(path)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,10 +101,5 @@ mod tests {
         assert_eq!(parsed.servers[0].port, config.servers[0].port);
     }
 
-    #[test]
-    fn test_config_path_not_empty() {
-        let path = get_config_path().unwrap();
-        assert!(path.to_string_lossy().contains("flick"));
-        assert!(path.to_string_lossy().contains("server.toml"));
-    }
 }
+

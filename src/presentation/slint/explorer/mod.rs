@@ -2,14 +2,20 @@ use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-use crate::config::{AppConfig, Bookmark};
-use crate::transfer::TransferQueue;
+use crate::app::services::explorer_service;
+use crate::domain::config::{AppConfig, Bookmark};
+use crate::domain::ports::ConfigRepository;
+use crate::domain::transfer::TransferQueue;
 use crate::AppWindow;
 use crate::BookmarkEntry;
 
-use super::local_browser::{self, LocalState};
-use super::remote_browser::{self, RemoteState};
-use super::transfer_manager;
+pub mod bookmarks_bindings;
+pub mod local_bindings;
+pub mod remote_bindings;
+pub mod transfer_bindings;
+
+use self::local_bindings::LocalState;
+use self::remote_bindings::RemoteState;
 
 pub(crate) fn format_size(bytes: u64, is_dir: bool) -> String {
     if is_dir {
@@ -29,9 +35,13 @@ pub(crate) fn format_size(bytes: u64, is_dir: bool) -> String {
     format!("{:.1} TB", size)
 }
 
-pub fn bind(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
+pub fn bind(
+    ui: &AppWindow,
+    config: Arc<Mutex<AppConfig>>,
+    repo: Arc<dyn ConfigRepository + Send + Sync>,
+) {
     let local_state = Arc::new(Mutex::new(LocalState {
-        current_path: local_browser::default_start_dir(),
+        current_path: local_bindings::default_start_dir(),
         selected_indices: HashSet::new(),
         cached_entries: Vec::new(),
         sort_field: "name".to_string(),
@@ -54,19 +64,30 @@ pub fn bind(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
     let transfer_queue = Arc::new(Mutex::new(TransferQueue::new()));
 
     // 本地回调
-    local_browser::bind(ui, local_state.clone());
+    local_bindings::bind(ui, local_state.clone());
 
     // 远程回调
-    remote_browser::bind(ui, config.clone(), remote_state.clone());
+    remote_bindings::bind(ui, config.clone(), remote_state.clone());
 
     // 传输队列回调
-    transfer_manager::bind(ui, local_state.clone(), remote_state.clone(), transfer_queue);
+    transfer_bindings::bind(
+        ui,
+        local_state.clone(),
+        remote_state.clone(),
+        transfer_queue,
+    );
 
     // 确认对话框回调
     bind_confirm_accepted(ui, local_state.clone(), remote_state.clone());
 
     // 书签回调
-    bind_bookmarks(ui, config.clone(), local_state, remote_state);
+    bind_bookmarks(
+        ui,
+        config.clone(),
+        repo,
+        local_state,
+        remote_state,
+    );
     refresh_bookmarks(ui, &config);
 }
 
@@ -114,7 +135,7 @@ fn do_local_delete(ui: &AppWindow, state: &Arc<Mutex<LocalState>>) {
     let mut s = state.lock().unwrap();
     s.selected_indices.clear();
     drop(s);
-    local_browser::refresh_local(ui, state);
+    local_bindings::refresh_local(ui, state);
 }
 
 fn do_remote_delete(ui: &AppWindow, state: &Arc<Mutex<RemoteState>>) {
@@ -138,7 +159,7 @@ fn do_remote_delete(ui: &AppWindow, state: &Arc<Mutex<RemoteState>>) {
         })
         .collect();
     for (path, is_dir) in &to_delete {
-        if let Err(e) = crate::remote_fs::remote_remove(uploader, path, *is_dir) {
+        if let Err(e) = crate::infra::remote_fs::remote_remove(uploader, path, *is_dir) {
             eprintln!("删除失败 {}: {}", path, e);
         }
     }
@@ -147,7 +168,7 @@ fn do_remote_delete(ui: &AppWindow, state: &Arc<Mutex<RemoteState>>) {
     s.selected_indices.clear();
     drop(s);
     let ui_weak = ui.as_weak();
-    remote_browser::refresh_remote_dir(state, &ui_weak, &current);
+    remote_bindings::refresh_remote_dir(state, &ui_weak, &current);
 }
 
 fn refresh_bookmarks(ui: &AppWindow, config: &Arc<Mutex<AppConfig>>) {
@@ -168,16 +189,22 @@ fn refresh_bookmarks(ui: &AppWindow, config: &Arc<Mutex<AppConfig>>) {
 fn bind_bookmarks(
     ui: &AppWindow,
     config: Arc<Mutex<AppConfig>>,
+    repo: Arc<dyn ConfigRepository + Send + Sync>,
     local_state: Arc<Mutex<LocalState>>,
     remote_state: Arc<Mutex<RemoteState>>,
 ) {
     // 添加书签
     let cfg_add = config.clone();
+    let repo_add = repo.clone();
     let ui_add = ui.as_weak();
     ui.on_add_bookmark(move |name, path, side| {
         let mut cfg = cfg_add.lock().unwrap();
         // 避免重复
-        if cfg.bookmarks.iter().any(|b| b.path == path.as_str() && b.side == side.as_str()) {
+        if explorer_service::dedup_bookmark(
+            &cfg.bookmarks,
+            path.as_str(),
+            side.as_str(),
+        ) {
             return;
         }
         cfg.bookmarks.push(Bookmark {
@@ -185,7 +212,7 @@ fn bind_bookmarks(
             path: path.to_string(),
             side: side.to_string(),
         });
-        let _ = cfg.save();
+        let _ = repo_add.save(&cfg);
         let entries: Vec<BookmarkEntry> = cfg.bookmarks.iter().map(|b| BookmarkEntry {
             name: SharedString::from(&b.name),
             path: SharedString::from(&b.path),
@@ -199,13 +226,14 @@ fn bind_bookmarks(
 
     // 删除书签
     let cfg_rm = config.clone();
+    let repo_rm = repo;
     let ui_rm = ui.as_weak();
     ui.on_remove_bookmark(move |index| {
         let mut cfg = cfg_rm.lock().unwrap();
         let idx = index as usize;
         if idx < cfg.bookmarks.len() {
             cfg.bookmarks.remove(idx);
-            let _ = cfg.save();
+            let _ = repo_rm.save(&cfg);
         }
         let entries: Vec<BookmarkEntry> = cfg.bookmarks.iter().map(|b| BookmarkEntry {
             name: SharedString::from(&b.name),
@@ -237,7 +265,7 @@ fn bind_bookmarks(
                 s.selected_indices.clear();
                 drop(s);
                 if let Some(ui) = ui_goto.upgrade() {
-                    local_browser::refresh_local(&ui, &local_state);
+                    local_bindings::refresh_local(&ui, &local_state);
                 }
             }
             "remote" => {
@@ -246,10 +274,15 @@ fn bind_bookmarks(
                 drop(s);
                 if let Some(ui) = ui_goto.upgrade() {
                     let weak = ui.as_weak();
-                    remote_browser::refresh_remote_dir(&remote_state, &weak, &bm.path);
+                    remote_bindings::refresh_remote_dir(
+                        &remote_state,
+                        &weak,
+                        &bm.path,
+                    );
                 }
             }
             _ => {}
         }
     });
 }
+

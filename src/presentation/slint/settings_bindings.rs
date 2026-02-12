@@ -2,14 +2,19 @@ use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use crate::config::AppConfig;
-use crate::ssh_core::SshUploader;
-use crate::ui_bridge::convert;
+use crate::app::services::settings_service;
+use crate::domain::config::AppConfig;
+use crate::domain::ports::ConfigRepository;
+use crate::presentation::slint::mapper;
 use crate::AppWindow;
 
-pub fn bind(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
-    bind_save(ui, config.clone());
-    bind_delete(ui, config.clone());
+pub fn bind(
+    ui: &AppWindow,
+    config: Arc<Mutex<AppConfig>>,
+    repo: Arc<dyn ConfigRepository + Send + Sync>,
+) {
+    bind_save(ui, config.clone(), repo.clone());
+    bind_delete(ui, config.clone(), repo);
     bind_load(ui, config);
     bind_pick_key(ui);
     bind_test(ui);
@@ -24,59 +29,56 @@ fn refresh_server_list(ui: &AppWindow, config: &AppConfig) {
     ui.set_servers(ModelRc::new(VecModel::from(servers)));
 }
 
-fn bind_save(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
+fn bind_save(
+    ui: &AppWindow,
+    config: Arc<Mutex<AppConfig>>,
+    repo: Arc<dyn ConfigRepository + Send + Sync>,
+) {
     let ui_handle = ui.as_weak();
     ui.on_save_config(move |index, ui_config| {
-        let mut guard = match config.lock() {
-            Ok(g) => g,
-            Err(_) => return,
+        let new_server = mapper::from_ui(&ui_config);
+        let updated = match settings_service::save_server(
+            &config,
+            &repo,
+            index,
+            new_server,
+        ) {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                eprintln!("Failed to save config: {}", e);
+                return;
+            }
         };
-        let new_server = convert::from_ui(&ui_config);
-
-        if index == -1 {
-            if new_server.is_default {
-                for s in &mut guard.servers {
-                    s.is_default = false;
-                }
-            }
-            guard.servers.push(new_server);
-        } else if index >= 0 && (index as usize) < guard.servers.len() {
-            if new_server.is_default {
-                for s in &mut guard.servers {
-                    s.is_default = false;
-                }
-            }
-            guard.servers[index as usize] = new_server;
-        }
-
-        if let Err(e) = guard.save() {
-            eprintln!("Failed to save config: {}", e);
-        }
 
         if let Some(ui) = ui_handle.upgrade() {
-            refresh_server_list(&ui, &guard);
+            refresh_server_list(&ui, &updated);
             ui.set_show_settings(false);
         }
     });
 }
 
-fn bind_delete(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
+fn bind_delete(
+    ui: &AppWindow,
+    config: Arc<Mutex<AppConfig>>,
+    repo: Arc<dyn ConfigRepository + Send + Sync>,
+) {
     let ui_handle = ui.as_weak();
     ui.on_delete_config(move |index| {
-        let mut guard = match config.lock() {
-            Ok(g) => g,
-            Err(_) => return,
-        };
-        if index >= 0 && (index as usize) < guard.servers.len() {
-            guard.servers.remove(index as usize);
-            if let Err(e) = guard.save() {
+        let updated = match settings_service::delete_server(
+            &config,
+            &repo,
+            index,
+        ) {
+            Ok(cfg) => cfg,
+            Err(e) => {
                 eprintln!("Failed to save config after delete: {}", e);
+                return;
             }
-            if let Some(ui) = ui_handle.upgrade() {
-                refresh_server_list(&ui, &guard);
-                ui.set_current_settings_index(-1);
-                ui.set_current_config(convert::default_ui_config());
-            }
+        };
+        if let Some(ui) = ui_handle.upgrade() {
+            refresh_server_list(&ui, &updated);
+            ui.set_current_settings_index(-1);
+            ui.set_current_config(mapper::default_ui_config());
         }
     });
 }
@@ -84,12 +86,9 @@ fn bind_delete(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
 fn bind_load(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
     let ui_handle = ui.as_weak();
     ui.on_load_config(move |index| {
-        let guard = match config.lock() {
-            Ok(g) => g,
-            Err(_) => return,
-        };
-        if index >= 0 && (index as usize) < guard.servers.len() {
-            let ui_config = convert::to_ui(&guard.servers[index as usize]);
+        if let Some(server) = settings_service::load_server(&config, index)
+        {
+            let ui_config = mapper::to_ui(&server);
             if let Some(ui) = ui_handle.upgrade() {
                 ui.set_current_config(ui_config);
             }
@@ -115,12 +114,12 @@ fn bind_pick_key(ui: &AppWindow) {
 fn bind_test(ui: &AppWindow) {
     let ui_handle = ui.as_weak();
     ui.on_test_connection(move |ui_config| {
-        let server_config = convert::from_ui(&ui_config);
+        let server_config = mapper::from_ui(&ui_config);
         let ui_handle_thread = ui_handle.clone();
 
         thread::spawn(move || {
             let (result, logs) =
-                SshUploader::connect_with_log(&server_config);
+                settings_service::test_connection(&server_config);
 
             let _ = slint::invoke_from_event_loop(move || {
                 if let Some(ui) = ui_handle_thread.upgrade() {
@@ -145,3 +144,4 @@ fn bind_test(ui: &AppWindow) {
         });
     });
 }
+

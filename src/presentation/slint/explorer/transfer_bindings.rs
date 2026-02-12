@@ -3,13 +3,14 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use crate::ssh_core::{FileTransfer, SshUploader};
-use crate::transfer::{Direction, TransferQueue, TransferStatus};
+use crate::app::services::transfer_service;
+use crate::infra::ssh::{FileTransfer, SshUploader};
+use crate::domain::transfer::{Direction, TransferQueue, TransferStatus};
 use crate::AppWindow;
 use crate::TransferEntry;
 
-use super::local_browser::{self, LocalState};
-use super::remote_browser::{self, RemoteState};
+use super::local_bindings::{self, LocalState};
+use super::remote_bindings::{self, RemoteState};
 
 pub(crate) fn bind(
     ui: &AppWindow,
@@ -126,7 +127,7 @@ fn bind_upload_selected(
                         let uh = ui_h.clone();
                         let path = rp.clone();
                         let _ = slint::invoke_from_event_loop(move || {
-                            remote_browser::refresh_remote_dir(&rs, &uh, &path);
+                            remote_bindings::refresh_remote_dir(&rs, &uh, &path);
                         });
                     }
                     Err(e) => {
@@ -235,7 +236,7 @@ fn bind_download_selected(
                         let uh = ui_h.clone();
                         let _ = slint::invoke_from_event_loop(move || {
                             if let Some(ui) = uh.upgrade() {
-                                local_browser::refresh_local(&ui, &ls);
+                                local_bindings::refresh_local(&ui, &ls);
                             }
                         });
                     }
@@ -340,7 +341,7 @@ fn bind_retry_transfer(
                             let uh = ui_h.clone();
                             let rp = rs.lock().unwrap().current_path.clone();
                             let _ = slint::invoke_from_event_loop(move || {
-                                remote_browser::refresh_remote_dir(&rs, &uh, &rp);
+                                remote_bindings::refresh_remote_dir(&rs, &uh, &rp);
                             });
                         }
                         Direction::Download => {
@@ -348,7 +349,7 @@ fn bind_retry_transfer(
                             let uh = ui_h.clone();
                             let _ = slint::invoke_from_event_loop(move || {
                                 if let Some(ui) = uh.upgrade() {
-                                    local_browser::refresh_local(&ui, &ls);
+                                    local_bindings::refresh_local(&ui, &ls);
                                 }
                             });
                         }
@@ -379,12 +380,8 @@ fn start_transfer_queue_sync(
             let transfer_entries: Vec<TransferEntry> = tasks
                 .iter()
                 .map(|t| {
-                    let (status_text, error_msg) = match &t.status {
-                        TransferStatus::Pending => ("pending".to_string(), String::new()),
-                        TransferStatus::InProgress => ("progress".to_string(), String::new()),
-                        TransferStatus::Completed => ("done".to_string(), String::new()),
-                        TransferStatus::Failed(e) => ("failed".to_string(), e.clone()),
-                    };
+                    let (status_text, error_msg) =
+                        transfer_service::status_to_text(&t.status);
 
                     let direction = match t.direction {
                         Direction::Upload => "上传",
@@ -421,7 +418,7 @@ fn start_transfer_queue_sync(
                         file_name: SharedString::from(&t.file_name),
                         direction: SharedString::from(direction),
                         progress: t.progress,
-                        status: SharedString::from(&status_text),
+                        status: SharedString::from(status_text),
                         error_msg: SharedString::from(&error_msg),
                         speed: SharedString::from(&speed),
                         eta: SharedString::from(&eta),
@@ -454,3 +451,4 @@ fn format_eta(secs: u64) -> String {
         format!("{}:{:02}:{:02}", secs / 3600, (secs % 3600) / 60, secs % 60)
     }
 }
+

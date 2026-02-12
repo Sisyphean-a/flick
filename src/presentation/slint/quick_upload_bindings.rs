@@ -3,9 +3,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use crate::config::{AppConfig, ServerConfig};
-use crate::ssh_core::{FileTransfer, SshUploader};
-use crate::utils;
+use crate::app::services::quick_upload_service;
+use crate::domain::config::{AppConfig, ServerConfig};
 use crate::AppWindow;
 
 pub fn bind(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
@@ -62,7 +61,9 @@ fn bind_start_upload(ui: &AppWindow, config: Arc<Mutex<AppConfig>>) {
         }
 
         let local_path = PathBuf::from(file_path_str.as_str());
-        if let Err(e) = utils::ensure_file_exists(&local_path) {
+        if let Err(e) =
+            quick_upload_service::validate_upload_path(&local_path)
+        {
             ui.set_status_log(format!("错误: {}", e).into());
             return;
         }
@@ -116,8 +117,6 @@ fn execute_upload(
     local_path: PathBuf,
     ui_handle: Weak<AppWindow>,
 ) -> anyhow::Result<()> {
-    let mut uploader = SshUploader::connect(&config)?;
-
     let file_name = local_path
         .file_name()
         .ok_or_else(|| anyhow::anyhow!("无效的文件名"))?;
@@ -135,7 +134,7 @@ fn execute_upload(
     })
     .ok();
 
-    uploader.upload(&local_path, &remote_path, |progress| {
+    quick_upload_service::execute_upload(config, local_path, |progress| {
         let ui_copy = ui_handle.clone();
         let _ = slint::invoke_from_event_loop(move || {
             if let Some(ui) = ui_copy.upgrade() {
@@ -168,3 +167,4 @@ fn finish_upload(
         }
     });
 }
+

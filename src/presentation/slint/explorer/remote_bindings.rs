@@ -3,13 +3,13 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use crate::config::AppConfig;
-use crate::remote_fs;
-use crate::ssh_core::SshUploader;
+use crate::domain::config::AppConfig;
+use crate::infra::remote_fs;
+use crate::infra::ssh::SshUploader;
 use crate::AppWindow;
 use crate::FileEntry;
 
-use super::explorer::format_size;
+use super::format_size;
 
 /// 远程文件浏览器状态
 pub(crate) struct RemoteState {

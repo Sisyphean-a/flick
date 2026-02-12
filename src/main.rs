@@ -1,18 +1,17 @@
 // 关闭控制台窗口 (仅 Release 模式且无调试输出时建议开启，此处暂保留以便调试)
 // #![windows_subsystem = "windows"]
 
-mod config;
-mod local_fs;
-mod remote_fs;
-mod ssh_core;
-mod transfer;
-mod ui_bridge;
-mod utils;
+mod app;
+mod domain;
+mod infra;
+mod presentation;
+mod shared;
 
 use slint::{ModelRc, SharedString, VecModel};
 use std::sync::{Arc, Mutex};
 
-use config::AppConfig;
+use app::context::AppContext;
+use domain::config::AppConfig;
 
 slint::include_modules!();
 
@@ -30,17 +29,28 @@ fn parse_args() -> Args {
 
 fn main() -> anyhow::Result<()> {
     let args = parse_args();
-    let config = Arc::new(Mutex::new(AppConfig::load()?));
+    let context = AppContext::bootstrap()?;
 
     let ui = AppWindow::new()?;
 
     // 初始化服务器列表
-    init_ui_state(&ui, &config, &args);
+    init_ui_state(&ui, &context.config, &args);
 
     // 绑定回调
-    ui_bridge::settings::bind(&ui, config.clone());
-    ui_bridge::quick_upload::bind(&ui, config.clone());
-    ui_bridge::explorer::bind(&ui, config);
+    presentation::slint::settings_bindings::bind(
+        &ui,
+        context.config.clone(),
+        context.config_repo.clone(),
+    );
+    presentation::slint::quick_upload_bindings::bind(
+        &ui,
+        context.config.clone(),
+    );
+    presentation::slint::explorer::bind(
+        &ui,
+        context.config,
+        context.config_repo,
+    );
 
     ui.run()?;
     Ok(())
@@ -94,7 +104,7 @@ fn init_ui_state(
     // 命令行文件参数 → 快速上传模式
     if let Some(path_str) = &args.file {
         ui.set_quick_upload_mode(true);
-        let display = utils::normalize_path(path_str)
+        let display = shared::path_utils::normalize_path(path_str)
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|_| path_str.clone());
         ui.set_file_path(SharedString::from(display));
@@ -107,3 +117,4 @@ fn init_ui_state(
         }
     }
 }
+

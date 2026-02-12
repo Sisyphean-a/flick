@@ -3,11 +3,11 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use crate::local_fs;
+use crate::infra::local_fs;
 use crate::AppWindow;
 use crate::FileEntry;
 
-use super::explorer::format_size;
+use super::format_size;
 
 /// 本地文件浏览器状态
 pub(crate) struct LocalState {
@@ -390,3 +390,4 @@ fn bind_local_filter_changed(ui: &AppWindow, state: Arc<Mutex<LocalState>>) {
         }
     });
 }
+
