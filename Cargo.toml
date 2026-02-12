@@ -5,17 +5,13 @@ edition = "2021"
 
 [dependencies]
 # UI 框架：轻量、Rust 原生、支持实时预览
-slint = { version = "1.9", features = ["backend-winit", "renderer-skia"] } 
+slint = { version = "1.9", default-features = false, features = ["backend-winit", "renderer-software", "compat-1-2"] }
 
 # SSH 核心库
 ssh2 = "0.9"
 
-# 命令行参数解析 (用于接收文件路径)
-clap = { version = "4.4", features = ["derive"] }
-
 # 配置文件处理 (TOML)
 serde = { version = "1.0", features = ["derive"] }
-serde_derive = "1.0"
 toml = "0.8"
 
 # 错误处理
@@ -29,10 +25,13 @@ rfd = "0.12"
 
 # 文件时间格式化
 chrono = "0.4"
-sysinfo = "0.38.1"
 
 [build-dependencies]
 slint-build = "1.9"
+
+[profile.dev]
+debug = 0
+incremental = false
 
 [profile.release]
 lto = true

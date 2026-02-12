@@ -2,8 +2,6 @@ use std::fs;
 use std::os::windows::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
-use sysinfo::Disks;
-
 use chrono::{DateTime, Local};
 
 /// 本地文件/目录条目
@@ -67,24 +65,22 @@ pub fn list_dir(path: &Path) -> anyhow::Result<Vec<LocalEntry>> {
 }
 
 fn list_drives() -> Vec<LocalEntry> {
-    let disks = Disks::new_with_refreshed_list();
     let mut entries = Vec::new();
 
-    for disk in disks.list() {
-        let mount_point = disk.mount_point();
-
-        // 过滤掉非根目录的挂载点（主要针对 Windows 上的 Docker 容器卷等）
-        // 如果有父目录，说明它不是一个根驱动器（如 C:\）
-        if mount_point.parent().is_some() {
+    for letter in b'A'..=b'Z' {
+        let drive = format!("{}:\\", letter as char);
+        let mount_point = PathBuf::from(&drive);
+        if !mount_point.exists() {
             continue;
         }
 
         entries.push(LocalEntry {
-            name: mount_point.to_string_lossy().to_string(),
+            name: drive,
             is_dir: true,
-            size: disk.total_space(),
+            // 无需额外系统依赖，仅用于驱动器列表展示。
+            size: 0,
             modified: String::new(),
-            path: mount_point.to_path_buf(),
+            path: mount_point,
         });
     }
 

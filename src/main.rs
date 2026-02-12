@@ -9,7 +9,6 @@ mod transfer;
 mod ui_bridge;
 mod utils;
 
-use clap::Parser;
 use slint::{ModelRc, SharedString, VecModel};
 use std::sync::{Arc, Mutex};
 
@@ -17,16 +16,20 @@ use config::AppConfig;
 
 slint::include_modules!();
 
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[derive(Debug, Default)]
 struct Args {
-    /// 要传输的文件路径 (可选，支持右键菜单传入)
-    #[arg(value_name = "FILE")]
     file: Option<String>,
 }
 
+fn parse_args() -> Args {
+    let file = std::env::args_os()
+        .nth(1)
+        .map(|s| s.to_string_lossy().into_owned());
+    Args { file }
+}
+
 fn main() -> anyhow::Result<()> {
-    let args = Args::parse();
+    let args = parse_args();
     let config = Arc::new(Mutex::new(AppConfig::load()?));
 
     let ui = AppWindow::new()?;
